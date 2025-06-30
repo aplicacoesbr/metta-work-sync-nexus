@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { useAuth } from '@/hooks/useAuth';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Layout } from '@/components/layout/Layout';
+import Index from '@/pages/Index';
 import Auth from '@/pages/Auth';
 import Dashboard from '@/pages/Dashboard';
 import Projects from '@/pages/Projects';
@@ -37,12 +38,13 @@ function AppContent() {
   return (
     <Router>
       <Routes>
-        <Route 
-          path="/"
-          element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/auth" replace />}
-        />
+        {/* Rota principal - sempre mostra a página Index que faz o redirecionamento */}
+        <Route path="/" element={<Index />} />
+        
+        {/* Rota de autenticação manual (fallback) */}
         <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/dashboard" replace />} />
         
+        {/* Rotas protegidas */}
         <Route
           path="/"
           element={
@@ -57,6 +59,7 @@ function AppContent() {
           <Route path="configuracoes" element={<Settings />} />
         </Route>
 
+        {/* Redireciona qualquer rota não encontrada para a principal */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
