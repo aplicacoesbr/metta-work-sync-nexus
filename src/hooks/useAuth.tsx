@@ -36,6 +36,19 @@ export const useAuth = () => {
     return { error };
   };
 
+  const signInWithAzure = async () => {
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        redirectTo: redirectUrl,
+        scopes: 'email profile'
+      }
+    });
+    return { error };
+  };
+
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
@@ -62,6 +75,7 @@ export const useAuth = () => {
     session,
     loading,
     signIn,
+    signInWithAzure,
     signUp,
     signOut,
   };

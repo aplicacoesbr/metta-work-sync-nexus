@@ -10,8 +10,10 @@ const Index = () => {
   useEffect(() => {
     if (!loading) {
       if (user) {
+        // Usuário autenticado - redireciona para dashboard
         navigate('/dashboard', { replace: true });
       } else {
+        // Usuário não autenticado - redireciona para autenticação automática
         navigate('/auth', { replace: true });
       }
     }
