@@ -1,60 +1,134 @@
 
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Calendar } from '@/components/calendar/Calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, FolderOpen, Users, TrendingUp } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const Dashboard = () => {
+  const { user } = useAuth();
+
+  // Fetch dashboard stats
+  const { data: stats } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      // Fetch projects count
+      const { data: projects } = await supabase
+        .from('projetos')
+        .select('id');
+
+      // Fetch users count
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('id');
+
+      // Fetch today's hours for current user
+      const today = new Date().toISOString().split('T')[0];
+      const { data: todayHours } = await supabase
+        .from('registros')
+        .select('horas')
+        .eq('user_id', user?.id)
+        .eq('data', today);
+
+      // Fetch total hours this month
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+        .toISOString().split('T')[0];
+      const { data: monthHours } = await supabase
+        .from('registros')
+        .select('horas')
+        .eq('user_id', user?.id)
+        .gte('data', startOfMonth);
+
+      const totalTodayHours = todayHours?.reduce((sum, record) => sum + Number(record.horas), 0) || 0;
+      const totalMonthHours = monthHours?.reduce((sum, record) => sum + Number(record.horas), 0) || 0;
+
+      return {
+        projectsCount: projects?.length || 0,
+        usersCount: users?.length || 0,
+        todayHours: totalTodayHours,
+        monthHours: totalMonthHours,
+      };
+    },
+  });
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-br from-blue-600 to-blue-700 border-blue-500 text-white">
+        <Card className="corporate-card dark:corporate-card-dark border-l-4 border-l-blue-600">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Horas Hoje</CardTitle>
-            <Clock className="h-4 w-4" />
+            <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Horas Hoje</CardTitle>
+            <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8.5h</div>
-            <p className="text-xs text-blue-100">+1.2h do que ontem</p>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {stats?.todayHours?.toFixed(1) || '0.0'}h
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Total de horas trabalhadas hoje
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-600 to-green-700 border-green-500 text-white">
+        <Card className="corporate-card dark:corporate-card-dark border-l-4 border-l-green-600">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Projetos Ativos</CardTitle>
-            <FolderOpen className="h-4 w-4" />
+            <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Projetos Ativos</CardTitle>
+            <FolderOpen className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-green-100">2 em desenvolvimento</p>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {stats?.projectsCount || 0}
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Projetos no sistema
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-600 to-purple-700 border-purple-500 text-white">
+        <Card className="corporate-card dark:corporate-card-dark border-l-4 border-l-purple-600">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Equipe</CardTitle>
-            <Users className="h-4 w-4" />
+            <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Equipe</CardTitle>
+            <Users className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-purple-100">8 online agora</p>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {stats?.usersCount || 0}
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Usuários cadastrados
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-600 to-orange-700 border-orange-500 text-white">
+        <Card className="corporate-card dark:corporate-card-dark border-l-4 border-l-orange-600">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Produtividade</CardTitle>
-            <TrendingUp className="h-4 w-4" />
+            <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">Horas do Mês</CardTitle>
+            <TrendingUp className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">94%</div>
-            <p className="text-xs text-orange-100">+5% este mês</p>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {stats?.monthHours?.toFixed(1) || '0.0'}h
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Total este mês
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Calendar Component */}
-      <Calendar />
+      <Card className="corporate-card dark:corporate-card-dark">
+        <CardHeader>
+          <CardTitle className="text-gray-900 dark:text-white">Calendário de Horas</CardTitle>
+          <CardDescription className="text-gray-600 dark:text-gray-400">
+            Registre e visualize suas horas trabalhadas
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Calendar />
+        </CardContent>
+      </Card>
     </div>
   );
 };

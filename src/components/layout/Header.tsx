@@ -38,20 +38,20 @@ export const Header = () => {
   };
 
   return (
-    <header className="bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700 px-6 py-4">
+    <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">
-            Dashboard
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Sistema Corporativo
           </h1>
-          <p className="text-gray-400 text-sm">
-            Bem-vindo ao sistema de gestão de projetos e horas
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
+            Gestão de Projetos e Controle de Horas
           </p>
         </div>
 
         <div className="flex items-center space-x-4">
           {/* Notifications */}
-          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+          <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
             <Bell className="h-5 w-5" />
           </Button>
 
@@ -60,24 +60,24 @@ export const Header = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                 <Avatar className="h-10 w-10 bg-blue-600">
-                  <AvatarFallback className="bg-blue-600 text-white">
+                  <AvatarFallback className="bg-blue-600 text-white font-semibold">
                     {user?.email ? getInitials(user.email) : 'U'}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 bg-slate-800 border-slate-700" align="end">
-              <DropdownMenuLabel className="text-white">
+            <DropdownMenuContent className="w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700" align="end">
+              <DropdownMenuLabel className="text-gray-900 dark:text-white">
                 Minha Conta
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-slate-700" />
-              <DropdownMenuItem className="text-gray-300 hover:bg-slate-700 hover:text-white cursor-pointer">
+              <DropdownMenuSeparator className="bg-gray-200 dark:bg-slate-700" />
+              <DropdownMenuItem className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
                 <span>Perfil</span>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuSeparator className="bg-gray-200 dark:bg-slate-700" />
               <DropdownMenuItem 
-                className="text-gray-300 hover:bg-slate-700 hover:text-white cursor-pointer"
+                className="text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
                 onClick={handleSignOut}
               >
                 <LogOut className="mr-2 h-4 w-4" />
