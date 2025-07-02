@@ -46,16 +46,63 @@ const Projects = () => {
   // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (name: string) => {
-      if (!user) throw new Error('Usuário não encontrado');
+      if (!user) {
+        console.error('User not found:', user);
+        throw new Error('Usuário não encontrado');
+      }
       
-      const { error } = await supabase
+      console.log('Creating project with user:', {
+        userId: user.id,
+        userEmail: user.email,
+        projectName: name
+      });
+
+      // Verificar se o usuário tem perfil
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      console.log('User profile:', profile);
+      if (profileError) {
+        console.error('Profile error:', profileError);
+        
+        // Se o perfil não existir, tentar criar um
+        if (profileError.code === 'PGRST116') {
+          console.log('Creating profile for user...');
+          const { error: createProfileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email || '',
+              nome_completo: user.email || 'Usuário',
+              role: user.email === 'aplicacoes@mettabr.com' ? 'administrador' : 'colaborador'
+            });
+
+          if (createProfileError) {
+            console.error('Error creating profile:', createProfileError);
+            throw new Error('Erro ao criar perfil do usuário');
+          }
+        }
+      }
+      
+      const { data, error } = await supabase
         .from('projetos')
         .insert({
           nome: name,
           created_by: user.id,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating project:', error);
+        throw error;
+      }
+      
+      console.log('Project created successfully:', data);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -67,6 +114,7 @@ const Projects = () => {
       });
     },
     onError: (error) => {
+      console.error('Project creation failed:', error);
       toast({
         title: "Erro ao criar projeto",
         description: error.message,
@@ -95,6 +143,11 @@ const Projects = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Projetos</h1>
           <p className="text-gray-600 dark:text-gray-400">Gerencie seus projetos, etapas e tarefas</p>
+          {user && (
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+              Logado como: {user.email}
+            </p>
+          )}
         </div>
         
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
