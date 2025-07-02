@@ -75,11 +75,11 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', projectId],
     queryFn: async () => {
-      if (!projectId) return [];
+      if (!projectId || stages.length === 0) return [];
       const { data, error } = await supabase
         .from('tarefas')
         .select('*')
-        .eq('etapa_id', { in: stages.map(s => s.id) })
+        .in('etapa_id', stages.map(s => s.id))
         .order('nome');
       
       if (error) throw error;
