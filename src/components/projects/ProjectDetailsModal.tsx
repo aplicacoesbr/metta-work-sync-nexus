@@ -42,13 +42,18 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
     queryKey: ['project', projectId],
     queryFn: async () => {
       if (!projectId) return null;
+      console.log('Fetching project:', projectId);
       const { data, error } = await supabase
         .from('projetos')
         .select('*')
         .eq('id', projectId)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching project:', error);
+        throw error;
+      }
+      console.log('Project data:', data);
       return data;
     },
     enabled: !!projectId,
@@ -59,30 +64,40 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
     queryKey: ['stages', projectId],
     queryFn: async () => {
       if (!projectId) return [];
+      console.log('Fetching stages for project:', projectId);
       const { data, error } = await supabase
         .from('etapas')
         .select('*')
         .eq('projeto_id', projectId)
         .order('nome');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching stages:', error);
+        throw error;
+      }
+      console.log('Stages data:', data);
       return data as Stage[];
     },
     enabled: !!projectId,
   });
 
-  // Fetch tasks
+  // Fetch tasks - only when we have stages
   const { data: tasks = [] } = useQuery({
-    queryKey: ['tasks', projectId],
+    queryKey: ['tasks', projectId, stages.map(s => s.id)],
     queryFn: async () => {
       if (!projectId || stages.length === 0) return [];
+      console.log('Fetching tasks for stages:', stages.map(s => s.id));
       const { data, error } = await supabase
         .from('tarefas')
         .select('*')
         .in('etapa_id', stages.map(s => s.id))
         .order('nome');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        throw error;
+      }
+      console.log('Tasks data:', data);
       return data as Task[];
     },
     enabled: !!projectId && stages.length > 0,
@@ -91,17 +106,28 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   // Add stage mutation
   const addStageMutation = useMutation({
     mutationFn: async (name: string) => {
-      if (!projectId || !user) throw new Error('Projeto ou usuário não encontrado');
+      if (!projectId || !user) {
+        console.error('Missing projectId or user:', { projectId, user });
+        throw new Error('Projeto ou usuário não encontrado');
+      }
       
-      const { error } = await supabase
+      console.log('Adding stage:', { name, projectId, userId: user.id });
+      const { data, error } = await supabase
         .from('etapas')
         .insert({
           nome: name,
           projeto_id: projectId,
           created_by: user.id,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding stage:', error);
+        throw error;
+      }
+      console.log('Stage added successfully:', data);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stages', projectId] });
@@ -111,6 +137,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       });
     },
     onError: (error) => {
+      console.error('Stage addition failed:', error);
       toast({
         title: "Erro ao adicionar etapa",
         description: error.message,
@@ -122,26 +149,38 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   // Add task mutation
   const addTaskMutation = useMutation({
     mutationFn: async ({ name, stageId }: { name: string; stageId: string }) => {
-      if (!user) throw new Error('Usuário não encontrado');
+      if (!user) {
+        console.error('Missing user:', user);
+        throw new Error('Usuário não encontrado');
+      }
       
-      const { error } = await supabase
+      console.log('Adding task:', { name, stageId, userId: user.id });
+      const { data, error } = await supabase
         .from('tarefas')
         .insert({
           nome: name,
           etapa_id: stageId,
           created_by: user.id,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding task:', error);
+        throw error;
+      }
+      console.log('Task added successfully:', data);
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId, stages.map(s => s.id)] });
       setNewTaskNames({});
       toast({
         title: "Tarefa adicionada com sucesso!",
       });
     },
     onError: (error) => {
+      console.error('Task addition failed:', error);
       toast({
         title: "Erro ao adicionar tarefa",
         description: error.message,
@@ -153,21 +192,27 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   // Delete stage mutation
   const deleteStageMutation = useMutation({
     mutationFn: async (stageId: string) => {
+      console.log('Deleting stage:', stageId);
       const { error } = await supabase
         .from('etapas')
         .delete()
         .eq('id', stageId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting stage:', error);
+        throw error;
+      }
+      console.log('Stage deleted successfully');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stages', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId, stages.map(s => s.id)] });
       toast({
         title: "Etapa removida com sucesso!",
       });
     },
     onError: (error) => {
+      console.error('Stage deletion failed:', error);
       toast({
         title: "Erro ao remover etapa",
         description: error.message,
@@ -179,20 +224,26 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   // Delete task mutation
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: string) => {
+      console.log('Deleting task:', taskId);
       const { error } = await supabase
         .from('tarefas')
         .delete()
         .eq('id', taskId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting task:', error);
+        throw error;
+      }
+      console.log('Task deleted successfully');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId, stages.map(s => s.id)] });
       toast({
         title: "Tarefa removida com sucesso!",
       });
     },
     onError: (error) => {
+      console.error('Task deletion failed:', error);
       toast({
         title: "Erro ao remover tarefa",
         description: error.message,
@@ -202,15 +253,22 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   });
 
   const handleAddStage = () => {
-    if (newStageName.trim()) {
-      addStageMutation.mutate(newStageName.trim());
+    const trimmedName = newStageName.trim();
+    console.log('Attempting to add stage:', trimmedName);
+    if (trimmedName) {
+      addStageMutation.mutate(trimmedName);
+    } else {
+      console.warn('Stage name is empty');
     }
   };
 
   const handleAddTask = (stageId: string) => {
-    const taskName = newTaskNames[stageId];
-    if (taskName?.trim()) {
-      addTaskMutation.mutate({ name: taskName.trim(), stageId });
+    const taskName = newTaskNames[stageId]?.trim();
+    console.log('Attempting to add task:', { taskName, stageId });
+    if (taskName) {
+      addTaskMutation.mutate({ name: taskName, stageId });
+    } else {
+      console.warn('Task name is empty');
     }
   };
 
@@ -218,7 +276,17 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
     return tasks.filter(task => task.etapa_id === stageId);
   };
 
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setNewStageName('');
+      setNewTaskNames({});
+    }
+  }, [isOpen]);
+
   if (!project) return null;
+
+  console.log('Rendering modal for project:', project.nome);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -244,7 +312,12 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                     onChange={(e) => setNewStageName(e.target.value)}
                     placeholder="Nome da etapa"
                     className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white"
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddStage()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddStage();
+                      }
+                    }}
                   />
                 </div>
                 <Button
@@ -253,7 +326,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Etapa
+                  {addStageMutation.isPending ? 'Adicionando...' : 'Adicionar Etapa'}
                 </Button>
               </div>
             </CardContent>
@@ -266,7 +339,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
               <CardHeader>
                 <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center space-x-2">
                   <FolderOpen className="h-5 w-5 text-blue-600" />
-                  <span>Etapas</span>
+                  <span>Etapas ({stages.length})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -285,6 +358,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                         variant="ghost"
                         size="sm"
                         onClick={() => deleteStageMutation.mutate(stage.id)}
+                        disabled={deleteStageMutation.isPending}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -300,7 +374,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
               <CardHeader>
                 <CardTitle className="text-lg text-gray-900 dark:text-white flex items-center space-x-2">
                   <List className="h-5 w-5 text-green-600" />
-                  <span>Tarefas</span>
+                  <span>Tarefas ({tasks.length})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -323,7 +397,12 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                           onChange={(e) => setNewTaskNames(prev => ({ ...prev, [stage.id]: e.target.value }))}
                           placeholder="Nova tarefa"
                           className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white text-sm"
-                          onKeyPress={(e) => e.key === 'Enter' && handleAddTask(stage.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddTask(stage.id);
+                            }
+                          }}
                         />
                         <Button
                           size="sm"
@@ -347,6 +426,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                               variant="ghost"
                               size="sm"
                               onClick={() => deleteTaskMutation.mutate(task.id)}
+                              disabled={deleteTaskMutation.isPending}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-6 w-6 p-0"
                             >
                               <Trash2 className="h-3 w-3" />
