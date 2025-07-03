@@ -31,19 +31,19 @@ interface TimeEntry {
 
 interface Project {
   id: string;
-  nome: string;
+  name: string;
 }
 
 interface Stage {
   id: string;
-  nome: string;
-  projeto_id: string;
+  name: string;
+  project_id: string;
 }
 
 interface Task {
   id: string;
-  nome: string;
-  etapa_id: string;
+  name: string;
+  stage_id: string;
 }
 
 export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
@@ -58,9 +58,9 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('projetos')
+        .from('projects')
         .select('*')
-        .order('nome');
+        .order('name');
       
       if (error) throw error;
       return data as Project[];
@@ -72,9 +72,9 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     queryKey: ['stages'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('etapas')
+        .from('stages')
         .select('*')
-        .order('nome');
+        .order('name');
       
       if (error) throw error;
       return data as Stage[];
@@ -86,9 +86,9 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     queryKey: ['tasks'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tarefas')
+        .from('tasks')
         .select('*')
-        .order('nome');
+        .order('name');
       
       if (error) throw error;
       return data as Task[];
@@ -107,27 +107,27 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
         .from('horasponto')
         .upsert({
           user_id: user.id,
-          data: dateStr,
-          horas_trabalhadas: totalHours,
+          date: dateStr,
+          total_hours: totalHours,
         });
 
       if (horaspontoError) throw horaspontoError;
 
-      // Save individual entries to registros table
+      // Save individual entries to records table
       for (const entry of entries) {
         if (entry.projeto && entry.horas > 0) {
-          const { error: registroError } = await supabase
-            .from('registros')
+          const { error: recordError } = await supabase
+            .from('records')
             .insert({
               user_id: user.id,
-              data: dateStr,
-              projeto_id: entry.projeto,
-              etapa_id: entry.etapa || null,
-              tarefa_id: entry.tarefa || null,
-              horas: entry.horas,
+              date: dateStr,
+              project_id: entry.projeto,
+              stage_id: entry.etapa || null,
+              task_id: entry.tarefa || null,
+              worked_hours: entry.horas,
             });
 
-          if (registroError) throw registroError;
+          if (recordError) throw recordError;
         }
       }
     },
@@ -189,11 +189,11 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   const isDataComplete = totalHours > 0 && getTotalDistributedHours() === totalHours;
 
   const getFilteredStages = (projectId: string) => {
-    return stages.filter(stage => stage.projeto_id === projectId);
+    return stages.filter(stage => stage.project_id === projectId);
   };
 
   const getFilteredTasks = (stageId: string) => {
-    return tasks.filter(task => task.etapa_id === stageId);
+    return tasks.filter(task => task.stage_id === stageId);
   };
 
   return (
@@ -285,7 +285,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                           <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
                             {projects.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
-                                {project.nome}
+                                {project.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -301,7 +301,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                           <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
                             {getFilteredStages(entry.projeto).map((stage) => (
                               <SelectItem key={stage.id} value={stage.id}>
-                                {stage.nome}
+                                {stage.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -317,7 +317,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                           <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
                             {getFilteredTasks(entry.etapa).map((task) => (
                               <SelectItem key={task.id} value={task.id}>
-                                {task.nome}
+                                {task.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
