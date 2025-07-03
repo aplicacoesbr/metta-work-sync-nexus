@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -109,7 +109,7 @@ export const Calendar = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700">
+      <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 max-w-4xl mx-auto">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl font-bold text-white">
@@ -145,7 +145,7 @@ export const Calendar = () => {
         </CardHeader>
         <CardContent>
           {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1 mb-4">
+          <div className="grid grid-cols-7 gap-2 mb-4 max-w-2xl mx-auto">
             {/* Week day headers */}
             {weekDays.map((day) => (
               <div key={day} className="text-center font-medium text-gray-400 py-2">

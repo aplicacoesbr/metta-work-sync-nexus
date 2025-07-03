@@ -53,93 +53,140 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  console.log('HoursModal - Current user:', user);
+
   // Fetch projects
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
+      console.log('Fetching projects...');
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+      }
+      console.log('Projects fetched:', data);
       return data as Project[];
     },
+    enabled: isOpen,
   });
 
   // Fetch stages
   const { data: stages = [] } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
+      console.log('Fetching stages...');
       const { data, error } = await supabase
         .from('stages')
         .select('*')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching stages:', error);
+        throw error;
+      }
+      console.log('Stages fetched:', data);
       return data as Stage[];
     },
+    enabled: isOpen,
   });
 
   // Fetch tasks
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
+      console.log('Fetching tasks...');
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        throw error;
+      }
+      console.log('Tasks fetched:', data);
       return data as Task[];
     },
+    enabled: isOpen,
   });
 
   // Save hours mutation
   const saveHoursMutation = useMutation({
     mutationFn: async (entries: TimeEntry[]) => {
-      if (!date || !user) throw new Error('Data ou usuário não encontrado');
+      if (!date || !user?.id) {
+        console.error('Missing date or user:', { date, userId: user?.id });
+        throw new Error('Data ou usuário não encontrado');
+      }
 
       const dateStr = format(date, 'yyyy-MM-dd');
+      console.log('Saving hours for date:', dateStr, 'User:', user.id);
       
-      // Save to horasponto table
-      const { error: horaspontoError } = await supabase
-        .from('horasponto')
-        .upsert({
-          user_id: user.id,
-          date: dateStr,
-          total_hours: totalHours,
-        });
+      try {
+        // Save to horasponto table first
+        console.log('Inserting horasponto record...');
+        const { data: horaspontoData, error: horaspontoError } = await supabase
+          .from('horasponto')
+          .upsert({
+            user_id: user.id,
+            date: dateStr,
+            total_hours: totalHours,
+          })
+          .select()
+          .single();
 
-      if (horaspontoError) throw horaspontoError;
-
-      // Save individual entries to records table
-      for (const entry of entries) {
-        if (entry.projeto && entry.horas > 0) {
-          const { error: recordError } = await supabase
-            .from('records')
-            .insert({
-              user_id: user.id,
-              date: dateStr,
-              project_id: entry.projeto,
-              stage_id: entry.etapa || null,
-              task_id: entry.tarefa || null,
-              worked_hours: entry.horas,
-            });
-
-          if (recordError) throw recordError;
+        if (horaspontoError) {
+          console.error('Error saving horasponto:', horaspontoError);
+          throw horaspontoError;
         }
+        console.log('Horasponto saved:', horaspontoData);
+
+        // Save individual entries to records table
+        for (const entry of entries) {
+          if (entry.projeto && entry.horas > 0) {
+            console.log('Inserting record:', entry);
+            const { data: recordData, error: recordError } = await supabase
+              .from('records')
+              .insert({
+                user_id: user.id,
+                date: dateStr,
+                project_id: entry.projeto,
+                stage_id: entry.etapa || null,
+                task_id: entry.tarefa || null,
+                worked_hours: entry.horas,
+              })
+              .select()
+              .single();
+
+            if (recordError) {
+              console.error('Error saving record:', recordError);
+              throw recordError;
+            }
+            console.log('Record saved:', recordData);
+          }
+        }
+      } catch (error) {
+        console.error('Save operation failed:', error);
+        throw error;
       }
     },
     onSuccess: () => {
+      console.log('Save successful');
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Horas salvas com sucesso!",
         description: `Registrado ${getTotalDistributedHours()}h de ${totalHours}h para ${date ? format(date, 'dd/MM/yyyy') : ''}`,
       });
+      setTimeEntries([]);
+      setTotalHours(0);
       onClose();
     },
     onError: (error) => {
+      console.error('Save failed:', error);
       toast({
         title: "Erro ao salvar horas",
         description: error.message,
@@ -174,10 +221,24 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   };
 
   const handleSave = async () => {
+    console.log('Handle save called');
+    console.log('Time entries:', timeEntries);
+    console.log('Total hours:', totalHours);
+    console.log('User:', user);
+
     if (timeEntries.length === 0) {
       toast({
         title: "Erro",
         description: "Adicione pelo menos uma entrada de horas",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (totalHours <= 0) {
+      toast({
+        title: "Erro",
+        description: "Digite o total de horas trabalhadas",
         variant: "destructive",
       });
       return;
@@ -195,6 +256,14 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   const getFilteredTasks = (stageId: string) => {
     return tasks.filter(task => task.stage_id === stageId);
   };
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setTimeEntries([]);
+      setTotalHours(0);
+    }
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
