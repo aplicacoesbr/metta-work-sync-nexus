@@ -74,7 +74,7 @@ export const Calendar = () => {
     const isCurrentMonth = isSameMonth(date, currentDate);
     const isCurrentDay = isToday(date);
 
-    let baseClass = "relative w-full h-16 p-2 rounded-lg transition-all duration-200 hover:scale-105 cursor-pointer ";
+    let baseClass = "relative w-full h-12 p-2 rounded-lg transition-all duration-200 hover:scale-105 cursor-pointer ";
 
     if (!isCurrentMonth) {
       baseClass += "text-gray-500 bg-slate-800/30 ";
@@ -165,7 +165,7 @@ export const Calendar = () => {
                 </div>
                 {getDayStatus(date) !== 'none' && (
                   <div className="absolute bottom-1 right-1">
-                    <div className="w-2 h-2 bg-white rounded-full opacity-80" />
+                    <div className="w-1.5 h-1.5 bg-white rounded-full opacity-80" />
                   </div>
                 )}
               </div>
