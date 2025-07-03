@@ -20,14 +20,14 @@ interface ProjectDetailsModalProps {
 
 interface Stage {
   id: string;
-  nome: string;
-  projeto_id: string;
+  name: string;
+  project_id: string;
 }
 
 interface Task {
   id: string;
-  nome: string;
-  etapa_id: string;
+  name: string;
+  stage_id: string;
 }
 
 export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetailsModalProps) => {
@@ -44,7 +44,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       if (!projectId) return null;
       console.log('Fetching project:', projectId);
       const { data, error } = await supabase
-        .from('projetos')
+        .from('projects')
         .select('*')
         .eq('id', projectId)
         .single();
@@ -66,10 +66,10 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       if (!projectId) return [];
       console.log('Fetching stages for project:', projectId);
       const { data, error } = await supabase
-        .from('etapas')
+        .from('stages')
         .select('*')
-        .eq('projeto_id', projectId)
-        .order('nome');
+        .eq('project_id', projectId)
+        .order('name');
       
       if (error) {
         console.error('Error fetching stages:', error);
@@ -88,10 +88,10 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       if (!projectId || stages.length === 0) return [];
       console.log('Fetching tasks for stages:', stages.map(s => s.id));
       const { data, error } = await supabase
-        .from('tarefas')
+        .from('tasks')
         .select('*')
-        .in('etapa_id', stages.map(s => s.id))
-        .order('nome');
+        .in('stage_id', stages.map(s => s.id))
+        .order('name');
       
       if (error) {
         console.error('Error fetching tasks:', error);
@@ -113,11 +113,10 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       
       console.log('Adding stage:', { name, projectId, userId: user.id });
       const { data, error } = await supabase
-        .from('etapas')
+        .from('stages')
         .insert({
-          nome: name,
-          projeto_id: projectId,
-          created_by: user.id,
+          name: name,
+          project_id: projectId,
         })
         .select()
         .single();
@@ -156,11 +155,10 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
       
       console.log('Adding task:', { name, stageId, userId: user.id });
       const { data, error } = await supabase
-        .from('tarefas')
+        .from('tasks')
         .insert({
-          nome: name,
-          etapa_id: stageId,
-          created_by: user.id,
+          name: name,
+          stage_id: stageId,
         })
         .select()
         .single();
@@ -194,7 +192,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
     mutationFn: async (stageId: string) => {
       console.log('Deleting stage:', stageId);
       const { error } = await supabase
-        .from('etapas')
+        .from('stages')
         .delete()
         .eq('id', stageId);
 
@@ -226,7 +224,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
     mutationFn: async (taskId: string) => {
       console.log('Deleting task:', taskId);
       const { error } = await supabase
-        .from('tarefas')
+        .from('tasks')
         .delete()
         .eq('id', taskId);
 
@@ -273,7 +271,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
   };
 
   const getTasksForStage = (stageId: string) => {
-    return tasks.filter(task => task.etapa_id === stageId);
+    return tasks.filter(task => task.stage_id === stageId);
   };
 
   // Reset form when modal closes
@@ -286,7 +284,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
 
   if (!project) return null;
 
-  console.log('Rendering modal for project:', project.nome);
+  console.log('Rendering modal for project:', project.name);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -294,7 +292,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center space-x-2 text-gray-900 dark:text-white">
             <FolderOpen className="h-5 w-5 text-blue-600" />
-            <span>Gerenciar Projeto: {project.nome}</span>
+            <span>Gerenciar Projeto: {project.name}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -353,7 +351,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                       key={stage.id}
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
                     >
-                      <span className="font-medium text-gray-900 dark:text-white">{stage.nome}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{stage.name}</span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -386,7 +384,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                   stages.map((stage) => (
                     <div key={stage.id} className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <h4 className="font-medium text-gray-900 dark:text-white text-sm">{stage.nome}</h4>
+                        <h4 className="font-medium text-gray-900 dark:text-white text-sm">{stage.name}</h4>
                         <Separator className="flex-1 bg-slate-300 dark:bg-slate-600" />
                       </div>
                       
@@ -421,7 +419,7 @@ export const ProjectDetailsModal = ({ projectId, isOpen, onClose }: ProjectDetai
                             key={task.id}
                             className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800"
                           >
-                            <span className="text-sm text-gray-900 dark:text-white">{task.nome}</span>
+                            <span className="text-sm text-gray-900 dark:text-white">{task.name}</span>
                             <Button
                               variant="ghost"
                               size="sm"
