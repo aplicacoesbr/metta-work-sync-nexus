@@ -14,10 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 
 interface User {
   id: string;
-  nome_completo: string;
+  full_name: string;
   email: string;
   role: string;
-  department: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const Settings = () => {
@@ -72,9 +73,8 @@ const Settings = () => {
         .from('profiles')
         .insert([{
           email: userData.email,
-          nome_completo: userData.name,
+          full_name: userData.name,
           role: userData.role,
-          department: userData.department || null,
           id: crypto.randomUUID(), // Temporary ID until user signs up
         }])
         .select()
@@ -273,11 +273,8 @@ const Settings = () => {
               {users?.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-900 dark:text-white">{user.nome_completo}</h4>
+                    <h4 className="font-medium text-gray-900 dark:text-white">{user.full_name}</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{user.email}</p>
-                    {user.department && (
-                      <p className="text-xs text-gray-500 dark:text-gray-500">{user.department}</p>
-                    )}
                   </div>
                   <div className="flex items-center space-x-2">
                     <Select

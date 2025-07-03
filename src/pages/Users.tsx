@@ -9,10 +9,9 @@ import { Plus, Mail, Clock, Shield, Edit, UserCheck } from 'lucide-react';
 
 interface User {
   id: string;
-  nome_completo: string;
+  full_name: string;
   email: string;
   role: string;
-  department: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,13 +89,13 @@ const Users = () => {
               <div className="flex items-center space-x-3">
                 <Avatar className="h-12 w-12 bg-blue-600">
                   <AvatarFallback className="bg-blue-600 text-white font-semibold">
-                    {getInitials(user.nome_completo)}
+                    {getInitials(user.full_name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <CardTitle className="text-gray-900 dark:text-white text-lg">{user.nome_completo}</CardTitle>
+                  <CardTitle className="text-gray-900 dark:text-white text-lg">{user.full_name}</CardTitle>
                   <CardDescription className="text-gray-600 dark:text-gray-400">
-                    {user.department || 'Departamento não definido'}
+                    Usuário do sistema
                   </CardDescription>
                 </div>
                 <Badge className={`${getRoleColor(user.role)} text-white`}>
