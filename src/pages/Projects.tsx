@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,45 +46,14 @@ const Projects = () => {
   const createProjectMutation = useMutation({
     mutationFn: async (name: string) => {
       if (!user) {
-        console.error('User not found:', user);
         throw new Error('Usuário não encontrado');
       }
       
-      console.log('Creating project with user:', {
+      console.log('Creating project:', {
+        name,
         userId: user.id,
-        userEmail: user.email,
-        projectName: name
+        userEmail: user.email
       });
-
-      // Verificar se o usuário tem perfil
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      console.log('User profile:', profile);
-      if (profileError) {
-        console.error('Profile error:', profileError);
-        
-        // Se o perfil não existir, tentar criar um
-        if (profileError.code === 'PGRST116') {
-          console.log('Creating profile for user...');
-          const { error: createProfileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email: user.email || '',
-              nome_completo: user.email || 'Usuário',
-              role: user.email === 'aplicacoes@mettabr.com' ? 'administrador' : 'colaborador'
-            });
-
-          if (createProfileError) {
-            console.error('Error creating profile:', createProfileError);
-            throw new Error('Erro ao criar perfil do usuário');
-          }
-        }
-      }
       
       const { data, error } = await supabase
         .from('projetos')

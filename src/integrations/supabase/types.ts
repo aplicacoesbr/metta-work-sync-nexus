@@ -9,283 +9,212 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      etapas: {
-        Row: {
-          created_at: string | null
-          created_by: string
-          id: string
-          nome: string
-          projeto_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by: string
-          id?: string
-          nome: string
-          projeto_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string
-          id?: string
-          nome?: string
-          projeto_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "etapas_projeto_id_fkey"
-            columns: ["projeto_id"]
-            isOneToOne: false
-            referencedRelation: "projetos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_etapas_created_by"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_etapas_projeto"
-            columns: ["projeto_id"]
-            isOneToOne: false
-            referencedRelation: "projetos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       horasponto: {
         Row: {
           created_at: string | null
-          data: string
-          horas_trabalhadas: number
+          date: string
           id: string
-          updated_at: string | null
-          user_id: string
+          total_hours: number
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
-          data: string
-          horas_trabalhadas: number
+          date: string
           id?: string
-          updated_at?: string | null
-          user_id: string
+          total_hours: number
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
-          data?: string
-          horas_trabalhadas?: number
+          date?: string
           id?: string
-          updated_at?: string | null
-          user_id?: string
+          total_hours?: number
+          user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_horasponto_user"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
           created_at: string | null
-          department: string | null
-          email: string
+          email: string | null
+          full_name: string | null
           id: string
-          nome_completo: string
-          role: string
+          role: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
-          department?: string | null
-          email: string
+          email?: string | null
+          full_name?: string | null
           id: string
-          nome_completo: string
-          role?: string
+          role?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
-          department?: string | null
-          email?: string
+          email?: string | null
+          full_name?: string | null
           id?: string
-          nome_completo?: string
-          role?: string
+          role?: string | null
           updated_at?: string | null
         }
         Relationships: []
       }
-      projetos: {
+      projects: {
         Row: {
           created_at: string | null
-          created_by: string
+          description: string | null
           id: string
-          nome: string
-          updated_at: string | null
+          name: string
+          status: string | null
         }
         Insert: {
           created_at?: string | null
-          created_by: string
+          description?: string | null
           id?: string
-          nome: string
-          updated_at?: string | null
+          name: string
+          status?: string | null
         }
         Update: {
           created_at?: string | null
-          created_by?: string
+          description?: string | null
           id?: string
-          nome?: string
-          updated_at?: string | null
+          name?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
+      records: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string | null
+          horasponto_id: string | null
+          id: string
+          percentage: number | null
+          project_id: string | null
+          stage_id: string | null
+          task_id: string | null
+          user_id: string | null
+          worked_hours: number
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description?: string | null
+          horasponto_id?: string | null
+          id?: string
+          percentage?: number | null
+          project_id?: string | null
+          stage_id?: string | null
+          task_id?: string | null
+          user_id?: string | null
+          worked_hours: number
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          horasponto_id?: string | null
+          id?: string
+          percentage?: number | null
+          project_id?: string | null
+          stage_id?: string | null
+          task_id?: string | null
+          user_id?: string | null
+          worked_hours?: number
         }
         Relationships: [
           {
-            foreignKeyName: "fk_projetos_created_by"
-            columns: ["created_by"]
+            foreignKeyName: "records_horasponto_id_fkey"
+            columns: ["horasponto_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "horasponto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "records_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "records_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "records_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
       }
-      registros: {
+      stages: {
         Row: {
           created_at: string | null
-          data: string
-          etapa_id: string | null
-          horas: number
+          description: string | null
           id: string
-          projeto_id: string
-          tarefa_id: string | null
-          updated_at: string | null
-          user_id: string
+          name: string
+          project_id: string | null
         }
         Insert: {
           created_at?: string | null
-          data: string
-          etapa_id?: string | null
-          horas: number
+          description?: string | null
           id?: string
-          projeto_id: string
-          tarefa_id?: string | null
-          updated_at?: string | null
-          user_id: string
+          name: string
+          project_id?: string | null
         }
         Update: {
           created_at?: string | null
-          data?: string
-          etapa_id?: string | null
-          horas?: number
+          description?: string | null
           id?: string
-          projeto_id?: string
-          tarefa_id?: string | null
-          updated_at?: string | null
-          user_id?: string
+          name?: string
+          project_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_registros_etapa"
-            columns: ["etapa_id"]
+            foreignKeyName: "stages_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "etapas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_registros_projeto"
-            columns: ["projeto_id"]
-            isOneToOne: false
-            referencedRelation: "projetos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_registros_tarefa"
-            columns: ["tarefa_id"]
-            isOneToOne: false
-            referencedRelation: "tarefas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_registros_user"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_etapa_id_fkey"
-            columns: ["etapa_id"]
-            isOneToOne: false
-            referencedRelation: "etapas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_projeto_id_fkey"
-            columns: ["projeto_id"]
-            isOneToOne: false
-            referencedRelation: "projetos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registros_tarefa_id_fkey"
-            columns: ["tarefa_id"]
-            isOneToOne: false
-            referencedRelation: "tarefas"
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
       }
-      tarefas: {
+      tasks: {
         Row: {
           created_at: string | null
-          created_by: string
-          etapa_id: string
+          description: string | null
           id: string
-          nome: string
-          updated_at: string | null
+          name: string
+          stage_id: string | null
         }
         Insert: {
           created_at?: string | null
-          created_by: string
-          etapa_id: string
+          description?: string | null
           id?: string
-          nome: string
-          updated_at?: string | null
+          name: string
+          stage_id?: string | null
         }
         Update: {
           created_at?: string | null
-          created_by?: string
-          etapa_id?: string
+          description?: string | null
           id?: string
-          nome?: string
-          updated_at?: string | null
+          name?: string
+          stage_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_tarefas_created_by"
-            columns: ["created_by"]
+            foreignKeyName: "tasks_stage_id_fkey"
+            columns: ["stage_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_tarefas_etapa"
-            columns: ["etapa_id"]
-            isOneToOne: false
-            referencedRelation: "etapas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tarefas_etapa_id_fkey"
-            columns: ["etapa_id"]
-            isOneToOne: false
-            referencedRelation: "etapas"
+            referencedRelation: "stages"
             referencedColumns: ["id"]
           },
         ]
