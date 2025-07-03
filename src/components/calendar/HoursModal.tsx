@@ -55,67 +55,123 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
 
   console.log('HoursModal - Current user:', user);
 
-  // Fetch projects
+  // Função para testar permissões básicas
+  const testPermissions = async () => {
+    if (!user) {
+      console.log('No user logged in');
+      return;
+    }
+
+    try {
+      console.log('Testing basic permissions...');
+      
+      // Test 1: Check current user session
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      console.log('Current session:', session, 'Error:', sessionError);
+
+      // Test 2: Try to access profiles table
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      console.log('Profile query result:', profileData, 'Error:', profileError);
+
+      // Test 3: Try simple projects query
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name')
+        .limit(1);
+      console.log('Projects query result:', projectsData, 'Error:', projectsError);
+
+    } catch (error) {
+      console.error('Permission test failed:', error);
+    }
+  };
+
+  // Executar teste de permissões quando o modal abrir
+  useEffect(() => {
+    if (isOpen && user) {
+      testPermissions();
+    }
+  }, [isOpen, user]);
+
+  // Fetch projects com tratamento de erro melhorado
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       console.log('Fetching projects...');
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error('Error fetching projects:', error);
+      try {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .order('name');
+        
+        if (error) {
+          console.error('Error fetching projects:', error);
+          throw error;
+        }
+        console.log('Projects fetched successfully:', data);
+        return data as Project[];
+      } catch (error) {
+        console.error('Projects query failed:', error);
         throw error;
       }
-      console.log('Projects fetched:', data);
-      return data as Project[];
     },
-    enabled: isOpen,
+    enabled: isOpen && !!user,
   });
 
-  // Fetch stages
+  // Fetch stages com tratamento de erro melhorado
   const { data: stages = [] } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
       console.log('Fetching stages...');
-      const { data, error } = await supabase
-        .from('stages')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error('Error fetching stages:', error);
+      try {
+        const { data, error } = await supabase
+          .from('stages')
+          .select('*')
+          .order('name');
+        
+        if (error) {
+          console.error('Error fetching stages:', error);
+          throw error;
+        }
+        console.log('Stages fetched successfully:', data);
+        return data as Stage[];
+      } catch (error) {
+        console.error('Stages query failed:', error);
         throw error;
       }
-      console.log('Stages fetched:', data);
-      return data as Stage[];
     },
-    enabled: isOpen,
+    enabled: isOpen && !!user,
   });
 
-  // Fetch tasks
+  // Fetch tasks com tratamento de erro melhorado
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       console.log('Fetching tasks...');
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('name');
-      
-      if (error) {
-        console.error('Error fetching tasks:', error);
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('name');
+        
+        if (error) {
+          console.error('Error fetching tasks:', error);
+          throw error;
+        }
+        console.log('Tasks fetched successfully:', data);
+        return data as Task[];
+      } catch (error) {
+        console.error('Tasks query failed:', error);
         throw error;
       }
-      console.log('Tasks fetched:', data);
-      return data as Task[];
     },
-    enabled: isOpen,
+    enabled: isOpen && !!user,
   });
 
-  // Save hours mutation
+  // Save hours mutation com logs mais detalhados
   const saveHoursMutation = useMutation({
     mutationFn: async (entries: TimeEntry[]) => {
       if (!date || !user?.id) {
@@ -124,11 +180,15 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       }
 
       const dateStr = format(date, 'yyyy-MM-dd');
-      console.log('Saving hours for date:', dateStr, 'User:', user.id);
+      console.log('=== STARTING SAVE OPERATION ===');
+      console.log('Date:', dateStr);
+      console.log('User ID:', user.id);
+      console.log('Total hours:', totalHours);
+      console.log('Entries:', entries);
       
       try {
-        // Save to horasponto table first
-        console.log('Inserting horasponto record...');
+        // Primeiro, vamos testar se conseguimos inserir apenas na tabela horasponto
+        console.log('Step 1: Inserting into horasponto...');
         const { data: horaspontoData, error: horaspontoError } = await supabase
           .from('horasponto')
           .upsert({
@@ -140,42 +200,51 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
           .single();
 
         if (horaspontoError) {
-          console.error('Error saving horasponto:', horaspontoError);
+          console.error('Error in horasponto insert:', horaspontoError);
           throw horaspontoError;
         }
-        console.log('Horasponto saved:', horaspontoData);
+        console.log('Horasponto inserted successfully:', horaspontoData);
 
-        // Save individual entries to records table
+        // Se chegou até aqui, vamos tentar inserir os records
+        console.log('Step 2: Inserting records...');
         for (const entry of entries) {
           if (entry.projeto && entry.horas > 0) {
             console.log('Inserting record:', entry);
+            
+            const recordToInsert = {
+              user_id: user.id,
+              date: dateStr,
+              project_id: entry.projeto,
+              stage_id: entry.etapa || null,
+              task_id: entry.tarefa || null,
+              worked_hours: entry.horas,
+            };
+            
+            console.log('Record data to insert:', recordToInsert);
+            
             const { data: recordData, error: recordError } = await supabase
               .from('records')
-              .insert({
-                user_id: user.id,
-                date: dateStr,
-                project_id: entry.projeto,
-                stage_id: entry.etapa || null,
-                task_id: entry.tarefa || null,
-                worked_hours: entry.horas,
-              })
+              .insert(recordToInsert)
               .select()
               .single();
 
             if (recordError) {
-              console.error('Error saving record:', recordError);
+              console.error('Error inserting record:', recordError);
               throw recordError;
             }
-            console.log('Record saved:', recordData);
+            console.log('Record inserted successfully:', recordData);
           }
         }
+        
+        console.log('=== SAVE OPERATION COMPLETED SUCCESSFULLY ===');
       } catch (error) {
-        console.error('Save operation failed:', error);
+        console.error('=== SAVE OPERATION FAILED ===');
+        console.error('Error details:', error);
         throw error;
       }
     },
     onSuccess: () => {
-      console.log('Save successful');
+      console.log('Save mutation successful');
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Horas salvas com sucesso!",
@@ -186,7 +255,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       onClose();
     },
     onError: (error) => {
-      console.error('Save failed:', error);
+      console.error('Save mutation failed:', error);
       toast({
         title: "Erro ao salvar horas",
         description: error.message,
@@ -204,16 +273,19 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       horas: 0,
     };
     setTimeEntries([...timeEntries, newEntry]);
+    console.log('Added new time entry:', newEntry);
   };
 
   const removeTimeEntry = (id: string) => {
     setTimeEntries(timeEntries.filter(entry => entry.id !== id));
+    console.log('Removed time entry:', id);
   };
 
   const updateTimeEntry = (id: string, field: keyof TimeEntry, value: string | number) => {
     setTimeEntries(timeEntries.map(entry => 
       entry.id === id ? { ...entry, [field]: value } : entry
     ));
+    console.log('Updated time entry:', id, field, value);
   };
 
   const getTotalDistributedHours = () => {
@@ -221,12 +293,23 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   };
 
   const handleSave = async () => {
-    console.log('Handle save called');
+    console.log('=== HANDLE SAVE CALLED ===');
     console.log('Time entries:', timeEntries);
     console.log('Total hours:', totalHours);
     console.log('User:', user);
 
+    if (!user) {
+      console.error('No user logged in');
+      toast({
+        title: "Erro",
+        description: "Usuário não autenticado",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (timeEntries.length === 0) {
+      console.log('No time entries');
       toast({
         title: "Erro",
         description: "Adicione pelo menos uma entrada de horas",
@@ -236,6 +319,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     }
 
     if (totalHours <= 0) {
+      console.log('No total hours');
       toast({
         title: "Erro",
         description: "Digite o total de horas trabalhadas",
@@ -244,6 +328,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       return;
     }
 
+    console.log('All validations passed, starting mutation...');
     saveHoursMutation.mutate(timeEntries);
   };
 
@@ -260,10 +345,26 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
+      console.log('Modal closed, resetting form');
       setTimeEntries([]);
       setTotalHours(0);
     }
   }, [isOpen]);
+
+  if (!user) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-gray-900 dark:text-white">
+          <DialogHeader>
+            <DialogTitle>Erro de Autenticação</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 text-center">
+            <p>Usuário não autenticado. Por favor, faça login novamente.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -278,6 +379,21 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Debug Info */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+              <CardHeader>
+                <CardTitle className="text-sm text-yellow-800 dark:text-yellow-200">Debug Info</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs text-yellow-700 dark:text-yellow-300">
+                <p>User ID: {user?.id}</p>
+                <p>Projects loaded: {projects.length}</p>
+                <p>Stages loaded: {stages.length}</p>
+                <p>Tasks loaded: {tasks.length}</p>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Total Hours Input */}
           <Card className="corporate-card dark:corporate-card-dark">
             <CardHeader>
