@@ -15,7 +15,7 @@ const Dashboard = () => {
     queryFn: async () => {
       // Fetch projects count
       const { data: projects } = await supabase
-        .from('projetos')
+        .from('projects')
         .select('id');
 
       // Fetch users count
@@ -26,22 +26,22 @@ const Dashboard = () => {
       // Fetch today's hours for current user
       const today = new Date().toISOString().split('T')[0];
       const { data: todayHours } = await supabase
-        .from('registros')
-        .select('horas')
+        .from('records')
+        .select('worked_hours')
         .eq('user_id', user?.id)
-        .eq('data', today);
+        .eq('date', today);
 
       // Fetch total hours this month
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
         .toISOString().split('T')[0];
       const { data: monthHours } = await supabase
-        .from('registros')
-        .select('horas')
+        .from('records')
+        .select('worked_hours')
         .eq('user_id', user?.id)
-        .gte('data', startOfMonth);
+        .gte('date', startOfMonth);
 
-      const totalTodayHours = todayHours?.reduce((sum, record) => sum + Number(record.horas), 0) || 0;
-      const totalMonthHours = monthHours?.reduce((sum, record) => sum + Number(record.horas), 0) || 0;
+      const totalTodayHours = todayHours?.reduce((sum, record) => sum + Number(record.worked_hours), 0) || 0;
+      const totalMonthHours = monthHours?.reduce((sum, record) => sum + Number(record.worked_hours), 0) || 0;
 
       return {
         projectsCount: projects?.length || 0,

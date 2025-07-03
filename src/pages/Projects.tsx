@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,10 +15,10 @@ import { ProjectDetailsModal } from '@/components/projects/ProjectDetailsModal';
 
 interface Project {
   id: string;
-  nome: string;
+  name: string;
+  description?: string;
+  status?: string;
   created_at: string;
-  created_by: string;
-  updated_at: string;
 }
 
 const Projects = () => {
@@ -33,7 +34,7 @@ const Projects = () => {
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('projetos')
+        .from('projects')
         .select('*')
         .order('created_at', { ascending: false });
       
@@ -56,10 +57,9 @@ const Projects = () => {
       });
       
       const { data, error } = await supabase
-        .from('projetos')
+        .from('projects')
         .insert({
-          nome: name,
-          created_by: user.id,
+          name: name,
         })
         .select()
         .single();
@@ -172,21 +172,21 @@ const Projects = () => {
                     <FolderOpen className="h-6 w-6 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-gray-900 dark:text-white text-lg">{project.nome}</CardTitle>
+                    <CardTitle className="text-gray-900 dark:text-white text-lg">{project.name}</CardTitle>
                     <CardDescription className="text-gray-600 dark:text-gray-400">
                       Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
                     </CardDescription>
                   </div>
                 </div>
                 <Badge variant="outline" className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                  Ativo
+                  {project.status || 'Ativo'}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 text-sm">
                 <Calendar className="h-4 w-4 text-blue-500" />
-                <span>Atualizado em {new Date(project.updated_at).toLocaleDateString('pt-BR')}</span>
+                <span>Atualizado em {new Date(project.created_at).toLocaleDateString('pt-BR')}</span>
               </div>
               
               <div className="flex space-x-2">
