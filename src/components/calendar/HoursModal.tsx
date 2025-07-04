@@ -53,198 +53,90 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  console.log('HoursModal - Current user:', user);
-
-  // Função para testar permissões básicas
-  const testPermissions = async () => {
-    if (!user) {
-      console.log('No user logged in');
-      return;
-    }
-
-    try {
-      console.log('Testing basic permissions...');
-      
-      // Test 1: Check current user session
-      const { data: session, error: sessionError } = await supabase.auth.getSession();
-      console.log('Current session:', session, 'Error:', sessionError);
-
-      // Test 2: Try to access profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      console.log('Profile query result:', profileData, 'Error:', profileError);
-
-      // Test 3: Try simple projects query
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('id, name')
-        .limit(1);
-      console.log('Projects query result:', projectsData, 'Error:', projectsError);
-
-    } catch (error) {
-      console.error('Permission test failed:', error);
-    }
-  };
-
-  // Executar teste de permissões quando o modal abrir
-  useEffect(() => {
-    if (isOpen && user) {
-      testPermissions();
-    }
-  }, [isOpen, user]);
-
-  // Fetch projects com tratamento de erro melhorado
+  // Fetch projects
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      console.log('Fetching projects...');
-      try {
-        const { data, error } = await supabase
-          .from('projects')
-          .select('*')
-          .order('name');
-        
-        if (error) {
-          console.error('Error fetching projects:', error);
-          throw error;
-        }
-        console.log('Projects fetched successfully:', data);
-        return data as Project[];
-      } catch (error) {
-        console.error('Projects query failed:', error);
-        throw error;
-      }
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Project[];
     },
     enabled: isOpen && !!user,
   });
 
-  // Fetch stages com tratamento de erro melhorado
+  // Fetch stages
   const { data: stages = [] } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
-      console.log('Fetching stages...');
-      try {
-        const { data, error } = await supabase
-          .from('stages')
-          .select('*')
-          .order('name');
-        
-        if (error) {
-          console.error('Error fetching stages:', error);
-          throw error;
-        }
-        console.log('Stages fetched successfully:', data);
-        return data as Stage[];
-      } catch (error) {
-        console.error('Stages query failed:', error);
-        throw error;
-      }
+      const { data, error } = await supabase
+        .from('stages')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Stage[];
     },
     enabled: isOpen && !!user,
   });
 
-  // Fetch tasks com tratamento de erro melhorado
+  // Fetch tasks
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      console.log('Fetching tasks...');
-      try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .order('name');
-        
-        if (error) {
-          console.error('Error fetching tasks:', error);
-          throw error;
-        }
-        console.log('Tasks fetched successfully:', data);
-        return data as Task[];
-      } catch (error) {
-        console.error('Tasks query failed:', error);
-        throw error;
-      }
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Task[];
     },
     enabled: isOpen && !!user,
   });
 
-  // Save hours mutation com logs mais detalhados
+  // Save hours mutation
   const saveHoursMutation = useMutation({
     mutationFn: async (entries: TimeEntry[]) => {
       if (!date || !user?.id) {
-        console.error('Missing date or user:', { date, userId: user?.id });
         throw new Error('Data ou usuário não encontrado');
       }
 
       const dateStr = format(date, 'yyyy-MM-dd');
-      console.log('=== STARTING SAVE OPERATION ===');
-      console.log('Date:', dateStr);
-      console.log('User ID:', user.id);
-      console.log('Total hours:', totalHours);
-      console.log('Entries:', entries);
       
-      try {
-        // Primeiro, vamos testar se conseguimos inserir apenas na tabela horasponto
-        console.log('Step 1: Inserting into horasponto...');
-        const { data: horaspontoData, error: horaspontoError } = await supabase
-          .from('horasponto')
-          .upsert({
-            user_id: user.id,
-            date: dateStr,
-            total_hours: totalHours,
-          })
-          .select()
-          .single();
+      // Insert into horasponto
+      const { error: horaspontoError } = await supabase
+        .from('horasponto')
+        .upsert({
+          user_id: user.id,
+          date: dateStr,
+          total_hours: totalHours,
+        });
 
-        if (horaspontoError) {
-          console.error('Error in horasponto insert:', horaspontoError);
-          throw horaspontoError;
-        }
-        console.log('Horasponto inserted successfully:', horaspontoData);
+      if (horaspontoError) throw horaspontoError;
 
-        // Se chegou até aqui, vamos tentar inserir os records
-        console.log('Step 2: Inserting records...');
-        for (const entry of entries) {
-          if (entry.projeto && entry.horas > 0) {
-            console.log('Inserting record:', entry);
-            
-            const recordToInsert = {
+      // Insert records
+      for (const entry of entries) {
+        if (entry.projeto && entry.horas > 0) {
+          const { error: recordError } = await supabase
+            .from('records')
+            .insert({
               user_id: user.id,
               date: dateStr,
               project_id: entry.projeto,
               stage_id: entry.etapa || null,
               task_id: entry.tarefa || null,
               worked_hours: entry.horas,
-            };
-            
-            console.log('Record data to insert:', recordToInsert);
-            
-            const { data: recordData, error: recordError } = await supabase
-              .from('records')
-              .insert(recordToInsert)
-              .select()
-              .single();
+            });
 
-            if (recordError) {
-              console.error('Error inserting record:', recordError);
-              throw recordError;
-            }
-            console.log('Record inserted successfully:', recordData);
-          }
+          if (recordError) throw recordError;
         }
-        
-        console.log('=== SAVE OPERATION COMPLETED SUCCESSFULLY ===');
-      } catch (error) {
-        console.error('=== SAVE OPERATION FAILED ===');
-        console.error('Error details:', error);
-        throw error;
       }
     },
     onSuccess: () => {
-      console.log('Save mutation successful');
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Horas salvas com sucesso!",
@@ -255,7 +147,6 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       onClose();
     },
     onError: (error) => {
-      console.error('Save mutation failed:', error);
       toast({
         title: "Erro ao salvar horas",
         description: error.message,
@@ -273,19 +164,16 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       horas: 0,
     };
     setTimeEntries([...timeEntries, newEntry]);
-    console.log('Added new time entry:', newEntry);
   };
 
   const removeTimeEntry = (id: string) => {
     setTimeEntries(timeEntries.filter(entry => entry.id !== id));
-    console.log('Removed time entry:', id);
   };
 
   const updateTimeEntry = (id: string, field: keyof TimeEntry, value: string | number) => {
     setTimeEntries(timeEntries.map(entry => 
       entry.id === id ? { ...entry, [field]: value } : entry
     ));
-    console.log('Updated time entry:', id, field, value);
   };
 
   const getTotalDistributedHours = () => {
@@ -293,13 +181,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   };
 
   const handleSave = async () => {
-    console.log('=== HANDLE SAVE CALLED ===');
-    console.log('Time entries:', timeEntries);
-    console.log('Total hours:', totalHours);
-    console.log('User:', user);
-
     if (!user) {
-      console.error('No user logged in');
       toast({
         title: "Erro",
         description: "Usuário não autenticado",
@@ -309,7 +191,6 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     }
 
     if (timeEntries.length === 0) {
-      console.log('No time entries');
       toast({
         title: "Erro",
         description: "Adicione pelo menos uma entrada de horas",
@@ -319,7 +200,6 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
     }
 
     if (totalHours <= 0) {
-      console.log('No total hours');
       toast({
         title: "Erro",
         description: "Digite o total de horas trabalhadas",
@@ -328,7 +208,6 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
       return;
     }
 
-    console.log('All validations passed, starting mutation...');
     saveHoursMutation.mutate(timeEntries);
   };
 
@@ -345,7 +224,6 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   // Reset form when modal closes
   useEffect(() => {
     if (!isOpen) {
-      console.log('Modal closed, resetting form');
       setTimeEntries([]);
       setTotalHours(0);
     }
@@ -354,7 +232,7 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
   if (!user) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-gray-900 dark:text-white">
+        <DialogContent className="bg-white dark:bg-slate-900">
           <DialogHeader>
             <DialogTitle>Erro de Autenticação</DialogTitle>
           </DialogHeader>
@@ -368,9 +246,9 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-gray-900 dark:text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-white dark:bg-slate-900 max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center space-x-2 text-gray-900 dark:text-white">
+          <DialogTitle className="text-xl font-bold flex items-center space-x-2">
             <Clock className="h-5 w-5 text-blue-600" />
             <span>
               Horas Trabalhadas - {date ? format(date, 'dd \'de\' MMMM \'de\' yyyy', { locale: ptBR }) : ''}
@@ -379,30 +257,15 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Debug Info */}
-          {process.env.NODE_ENV === 'development' && (
-            <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
-              <CardHeader>
-                <CardTitle className="text-sm text-yellow-800 dark:text-yellow-200">Debug Info</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs text-yellow-700 dark:text-yellow-300">
-                <p>User ID: {user?.id}</p>
-                <p>Projects loaded: {projects.length}</p>
-                <p>Stages loaded: {stages.length}</p>
-                <p>Tasks loaded: {tasks.length}</p>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Total Hours Input */}
-          <Card className="corporate-card dark:corporate-card-dark">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-lg text-gray-900 dark:text-white">Total de Horas Trabalhadas</CardTitle>
+              <CardTitle className="text-lg">Total de Horas Trabalhadas</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-4">
                 <div className="flex-1">
-                  <Label htmlFor="totalHours" className="text-gray-700 dark:text-gray-300">Horas Totais</Label>
+                  <Label htmlFor="totalHours">Horas Totais</Label>
                   <Input
                     id="totalHours"
                     type="number"
@@ -411,12 +274,11 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                     max="24"
                     value={totalHours}
                     onChange={(e) => setTotalHours(parseFloat(e.target.value) || 0)}
-                    className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white"
                     placeholder="8.0"
                   />
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Distribuído</div>
+                  <div className="text-sm text-gray-600">Distribuído</div>
                   <div className={`text-lg font-bold ${getTotalDistributedHours() === totalHours ? 'text-green-600' : 'text-red-600'}`}>
                     {getTotalDistributedHours()}h
                   </div>
@@ -426,35 +288,31 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
           </Card>
 
           {/* Time Entries */}
-          <Card className="corporate-card dark:corporate-card-dark">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg text-gray-900 dark:text-white">Distribuição por Projeto</CardTitle>
-              <Button
-                onClick={addTimeEntry}
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
+              <CardTitle className="text-lg">Distribuição por Projeto</CardTitle>
+              <Button onClick={addTimeEntry} size="sm" className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               {timeEntries.length === 0 ? (
-                <div className="text-center text-gray-600 dark:text-gray-400 py-8">
+                <div className="text-center text-gray-600 py-8">
                   Nenhuma distribuição de horas adicionada.
                   <br />
                   Clique em "Adicionar" para começar.
                 </div>
               ) : (
                 timeEntries.map((entry, index) => (
-                  <div key={entry.id} className="space-y-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div key={entry.id} className="space-y-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-gray-900 dark:text-white">Entrada #{index + 1}</h4>
+                      <h4 className="font-medium">Entrada #{index + 1}</h4>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => removeTimeEntry(entry.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -462,12 +320,12 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
-                        <Label className="text-gray-700 dark:text-gray-300">Projeto</Label>
+                        <Label>Projeto</Label>
                         <Select onValueChange={(value) => updateTimeEntry(entry.id, 'projeto', value)}>
-                          <SelectTrigger className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600">
+                          <SelectTrigger>
                             <SelectValue placeholder="Selecionar projeto" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+                          <SelectContent>
                             {projects.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
                                 {project.name}
@@ -478,12 +336,12 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                       </div>
 
                       <div>
-                        <Label className="text-gray-700 dark:text-gray-300">Etapa</Label>
+                        <Label>Etapa</Label>
                         <Select onValueChange={(value) => updateTimeEntry(entry.id, 'etapa', value)}>
-                          <SelectTrigger className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600">
+                          <SelectTrigger>
                             <SelectValue placeholder="Selecionar etapa" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+                          <SelectContent>
                             {getFilteredStages(entry.projeto).map((stage) => (
                               <SelectItem key={stage.id} value={stage.id}>
                                 {stage.name}
@@ -494,12 +352,12 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                       </div>
 
                       <div>
-                        <Label className="text-gray-700 dark:text-gray-300">Tarefa</Label>
+                        <Label>Tarefa</Label>
                         <Select onValueChange={(value) => updateTimeEntry(entry.id, 'tarefa', value)}>
-                          <SelectTrigger className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600">
+                          <SelectTrigger>
                             <SelectValue placeholder="Selecionar tarefa" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+                          <SelectContent>
                             {getFilteredTasks(entry.etapa).map((task) => (
                               <SelectItem key={task.id} value={task.id}>
                                 {task.name}
@@ -510,14 +368,13 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
                       </div>
 
                       <div>
-                        <Label className="text-gray-700 dark:text-gray-300">Horas</Label>
+                        <Label>Horas</Label>
                         <Input
                           type="number"
                           step="0.5"
                           min="0"
                           value={entry.horas}
                           onChange={(e) => updateTimeEntry(entry.id, 'horas', parseFloat(e.target.value) || 0)}
-                          className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white"
                           placeholder="0.0"
                         />
                       </div>
@@ -528,9 +385,9 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
 
               {timeEntries.length > 0 && (
                 <>
-                  <Separator className="bg-slate-300 dark:bg-slate-600" />
+                  <Separator />
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-600">
                       Diferença: {(totalHours - getTotalDistributedHours()).toFixed(1)}h
                     </span>
                     <span className={`font-bold ${isDataComplete ? 'text-green-600' : 'text-red-600'}`}>
@@ -544,17 +401,13 @@ export const HoursModal = ({ date, isOpen, onClose }: HoursModalProps) => {
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-slate-700"
-            >
+            <Button variant="outline" onClick={onClose}>
               Cancelar
             </Button>
             <Button
               onClick={handleSave}
               disabled={saveHoursMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700"
             >
               {saveHoursMutation.isPending ? 'Salvando...' : 'Salvar Horas'}
             </Button>
