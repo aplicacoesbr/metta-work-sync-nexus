@@ -29,7 +29,7 @@ interface Project {
 
 export default function Projects() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
@@ -78,12 +78,12 @@ export default function Projects() {
   });
 
   const handleNewProject = () => {
-    setSelectedProject(null);
+    setSelectedProjectId(null);
     setIsModalOpen(true);
   };
 
   const handleEditProject = (project: Project) => {
-    setSelectedProject(project);
+    setSelectedProjectId(project.id);
     setIsModalOpen(true);
   };
 
@@ -235,7 +235,7 @@ export default function Projects() {
       </div>
 
       <ProjectDetailsModal
-        project={selectedProject}
+        projectId={selectedProjectId}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />
