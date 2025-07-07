@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, FolderOpen, Calendar, User, Settings, Eye } from 'lucide-react';
+import { Plus, FolderOpen, Calendar, Settings, Eye, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { ProjectDetailsModal } from '@/components/projects/ProjectDetailsModal';
@@ -25,6 +25,7 @@ const Projects = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -42,6 +43,12 @@ const Projects = () => {
       return data as Project[];
     },
   });
+
+  // Filter projects based on search term
+  const filteredProjects = projects?.filter(project =>
+    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   // Create project mutation
   const createProjectMutation = useMutation({
@@ -91,9 +98,41 @@ const Projects = () => {
     },
   });
 
+  // Delete project mutation
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast({
+        title: "Projeto excluído com sucesso!",
+        description: "O projeto foi removido permanentemente.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao excluir projeto",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateProject = () => {
     if (newProjectName.trim()) {
       createProjectMutation.mutate(newProjectName.trim());
+    }
+  };
+
+  const handleDeleteProject = (projectId: string, projectName: string) => {
+    if (confirm(`Tem certeza que deseja excluir o projeto "${projectName}"? Esta ação não pode ser desfeita.`)) {
+      deleteProjectMutation.mutate(projectId);
     }
   };
 
@@ -162,8 +201,19 @@ const Projects = () => {
         </Dialog>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
+          placeholder="Pesquisar projetos..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects?.map((project) => (
+        {filteredProjects?.map((project) => (
           <Card key={project.id} className="corporate-card dark:corporate-card-dark hover:shadow-lg transition-all duration-300">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -178,9 +228,19 @@ const Projects = () => {
                     </CardDescription>
                   </div>
                 </div>
-                <Badge variant="outline" className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                  {project.status || 'Ativo'}
-                </Badge>
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline" className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                    {project.status || 'Ativo'}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteProject(project.id, project.name)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -212,6 +272,16 @@ const Projects = () => {
           </Card>
         ))}
       </div>
+
+      {filteredProjects?.length === 0 && projects?.length > 0 && (
+        <div className="text-center py-12">
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <Search className="h-8 w-8 text-blue-600" />
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">Nenhum projeto encontrado</p>
+          <p className="text-gray-500 dark:text-gray-500 text-sm">Tente ajustar os termos de pesquisa</p>
+        </div>
+      )}
 
       {projects?.length === 0 && (
         <div className="text-center py-12">
