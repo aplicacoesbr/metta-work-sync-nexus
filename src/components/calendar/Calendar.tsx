@@ -6,6 +6,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { HoursRegistrationForm } from './HoursRegistrationForm';
 
 interface DayData {
@@ -19,11 +22,10 @@ export const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
-  const [daysData, setDaysData] = useState<DayData[]>([]);
+  const { user } = useAuth();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   // Calculate the days to show (including prev/next month days for complete weeks)
   const startDate = new Date(monthStart);
@@ -35,6 +37,66 @@ export const Calendar = () => {
   endDate.setDate(endDate.getDate() + (6 - endDay));
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+  // Fetch calendar data
+  const { data: calendarData = [] } = useQuery({
+    queryKey: ['calendar-data', format(monthStart, 'yyyy-MM'), user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+
+      const startStr = format(startDate, 'yyyy-MM-dd');
+      const endStr = format(endDate, 'yyyy-MM-dd');
+
+      // Fetch horasponto data
+      const { data: horaspontoData, error: horaspontoError } = await supabase
+        .from('horasponto')
+        .select('date, total_hours')
+        .eq('user_id', user.id)
+        .gte('date', startStr)
+        .lte('date', endStr);
+
+      if (horaspontoError) throw horaspontoError;
+
+      // Fetch records data
+      const { data: recordsData, error: recordsError } = await supabase
+        .from('records')
+        .select('date, worked_hours')
+        .eq('user_id', user.id)
+        .gte('date', startStr)
+        .lte('date', endStr);
+
+      if (recordsError) throw recordsError;
+
+      // Combine data by date
+      const dataByDate: { [key: string]: DayData } = {};
+
+      calendarDays.forEach(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        dataByDate[dateStr] = {
+          date: day,
+          totalHours: 0,
+          distributedHours: 0,
+          hasRecords: false,
+        };
+      });
+
+      horaspontoData?.forEach(hp => {
+        if (dataByDate[hp.date]) {
+          dataByDate[hp.date].totalHours = hp.total_hours;
+          dataByDate[hp.date].hasRecords = true;
+        }
+      });
+
+      recordsData?.forEach(record => {
+        if (dataByDate[record.date]) {
+          dataByDate[record.date].distributedHours += record.worked_hours;
+        }
+      });
+
+      return Object.values(dataByDate);
+    },
+    enabled: !!user?.id,
+  });
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
@@ -48,22 +110,24 @@ export const Calendar = () => {
     });
   };
 
+  const getDayData = (date: Date): DayData | undefined => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return calendarData.find(d => format(d.date, 'yyyy-MM-dd') === dateStr);
+  };
+
   const getDayStatus = (date: Date) => {
-    // Mock data for demonstration - replace with real data from Supabase
-    const dayData = daysData.find(d => 
-      d.date.toDateString() === date.toDateString()
-    );
+    const dayData = getDayData(date);
 
     if (!dayData || !dayData.hasRecords) {
       return 'none'; // Gray
     }
 
     if (dayData.totalHours === dayData.distributedHours && dayData.totalHours > 0) {
-      return 'complete'; // Blue
+      return 'complete'; // Blue - horas completas e distribuídas
     }
 
     if (dayData.distributedHours > 0 || dayData.totalHours > 0) {
-      return 'partial'; // Red
+      return 'partial'; // Red - parcial ou pendente
     }
 
     return 'none';
@@ -156,22 +220,30 @@ export const Calendar = () => {
               ))}
               
               {/* Calendar days */}
-              {calendarDays.map((date) => (
-                <div
-                  key={date.toISOString()}
-                  className={getDayColorClass(date)}
-                  onClick={() => handleDayClick(date)}
-                >
-                  <div className="text-sm font-medium">
-                    {format(date, 'd')}
-                  </div>
-                  {getDayStatus(date) !== 'none' && (
-                    <div className="absolute bottom-1 right-1">
-                      <div className="w-1.5 h-1.5 bg-white rounded-full opacity-80" />
+              {calendarDays.map((date) => {
+                const dayData = getDayData(date);
+                return (
+                  <div
+                    key={date.toISOString()}
+                    className={getDayColorClass(date)}
+                    onClick={() => handleDayClick(date)}
+                  >
+                    <div className="text-sm font-medium">
+                      {format(date, 'd')}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {dayData?.hasRecords && (
+                      <div className="absolute bottom-1 right-1">
+                        <div className="w-1.5 h-1.5 bg-white rounded-full opacity-80" />
+                      </div>
+                    )}
+                    {dayData?.totalHours > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 text-xs text-center text-white opacity-75">
+                        {dayData.totalHours}h
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Legend */}
