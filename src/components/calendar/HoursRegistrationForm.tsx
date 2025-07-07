@@ -30,6 +30,7 @@ interface HoursRegistrationFormProps {
   date: Date | null;
   isVisible: boolean;
   onClose: () => void;
+  onProjectAdded?: () => void;
   startWithProjectsTab?: boolean;
 }
 
@@ -60,7 +61,13 @@ interface Task {
   stage_id: string;
 }
 
-export const HoursRegistrationForm = ({ date, isVisible, onClose, startWithProjectsTab = false }: HoursRegistrationFormProps) => {
+export const HoursRegistrationForm = ({ 
+  date, 
+  isVisible, 
+  onClose, 
+  onProjectAdded,
+  startWithProjectsTab = false 
+}: HoursRegistrationFormProps) => {
   const [totalHoursInput, setTotalHoursInput] = useState<string>('');
   const [totalHours, setTotalHours] = useState<number>(0);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -73,7 +80,7 @@ export const HoursRegistrationForm = ({ date, isVisible, onClose, startWithProje
   const queryClient = useQueryClient();
 
   // Fetch existing data for the selected date
-  const { data: existingData } = useQuery({
+  const { data: existingData, refetch: refetchExistingData } = useQuery({
     queryKey: ['day-data', date ? format(date, 'yyyy-MM-dd') : null, user?.id],
     queryFn: async () => {
       if (!date || !user?.id) return null;
@@ -202,7 +209,24 @@ export const HoursRegistrationForm = ({ date, isVisible, onClose, startWithProje
         .eq('user_id', user.id)
         .eq('date', dateStr);
 
-      for (const entry of data.entries) {
+      // Auto-distribute hours if not filled
+      let entriesToSave = [...data.entries];
+      const entriesWithHours = entriesToSave.filter(entry => entry.projeto && entry.horas > 0);
+      const entriesWithoutHours = entriesToSave.filter(entry => entry.projeto && entry.horas === 0);
+
+      if (entriesWithoutHours.length > 0) {
+        const totalDistributed = entriesWithHours.reduce((sum, entry) => sum + entry.horas, 0);
+        const remainingHours = data.totalHours - totalDistributed;
+        
+        if (remainingHours > 0) {
+          const hoursPerEntry = remainingHours / entriesWithoutHours.length;
+          entriesWithoutHours.forEach(entry => {
+            entry.horas = hoursPerEntry;
+          });
+        }
+      }
+
+      for (const entry of entriesToSave) {
         if (entry.projeto && entry.horas > 0) {
           const { error: recordError } = await supabase
             .from('records')
@@ -225,12 +249,21 @@ export const HoursRegistrationForm = ({ date, isVisible, onClose, startWithProje
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       queryClient.invalidateQueries({ queryKey: ['calendar-data'] });
       queryClient.invalidateQueries({ queryKey: ['day-data'] });
+      
+      // Refetch existing data to update the form
+      refetchExistingData();
+      
+      // Call the callback to update parent component
+      if (onProjectAdded) {
+        onProjectAdded();
+      }
+      
       toast({
         title: "Horas registradas com sucesso!",
         description: `Registrado ${formatTimeToDisplay(getTotalDistributedHours())} de ${formatTimeToDisplay(totalHours)} para ${date ? format(date, 'dd/MM/yyyy') : ''}`,
       });
-      resetForm();
-      onClose();
+      
+      // Don't close the form, just show success message
     },
     onError: (error) => {
       console.error('Erro ao salvar horas:', error);
@@ -628,7 +661,7 @@ export const HoursRegistrationForm = ({ date, isVisible, onClose, startWithProje
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
             <Button variant="outline" onClick={onClose} className="h-9 px-4">
-              Cancelar
+              Fechar
             </Button>
             <Button
               onClick={handleSave}

@@ -37,7 +37,7 @@ export const Calendar = () => {
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const { data: calendarData = [] } = useQuery({
+  const { data: calendarData = [], refetch: refetchCalendarData } = useQuery({
     queryKey: ['calendar-data', format(monthStart, 'yyyy-MM'), user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
@@ -173,6 +173,19 @@ export const Calendar = () => {
     }
   };
 
+  const handleFormClose = () => {
+    setIsFormVisible(false);
+    // Refetch calendar data when form closes to show updated information
+    refetchCalendarData();
+  };
+
+  // Keep the selected date and form visible when projects are added
+  const handleProjectAdded = () => {
+    // Refetch calendar data to show updated information
+    refetchCalendarData();
+    // Keep form visible and selected date unchanged
+  };
+
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
@@ -269,7 +282,8 @@ export const Calendar = () => {
       <HoursRegistrationForm
         date={selectedDate}
         isVisible={isFormVisible}
-        onClose={() => setIsFormVisible(false)}
+        onClose={handleFormClose}
+        onProjectAdded={handleProjectAdded}
         startWithProjectsTab={startWithProjectsTab}
       />
     </div>
