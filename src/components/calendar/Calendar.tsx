@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,12 +21,12 @@ export const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
+  const [startWithProjectsTab, setStartWithProjectsTab] = useState(false);
   const { user } = useAuth();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
 
-  // Calculate the days to show (including prev/next month days for complete weeks)
   const startDate = new Date(monthStart);
   const startDay = getDay(monthStart);
   startDate.setDate(startDate.getDate() - startDay);
@@ -38,7 +37,6 @@ export const Calendar = () => {
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  // Fetch calendar data
   const { data: calendarData = [] } = useQuery({
     queryKey: ['calendar-data', format(monthStart, 'yyyy-MM'), user?.id],
     queryFn: async () => {
@@ -47,7 +45,6 @@ export const Calendar = () => {
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      // Fetch horasponto data
       const { data: horaspontoData, error: horaspontoError } = await supabase
         .from('horasponto')
         .select('date, total_hours')
@@ -57,7 +54,6 @@ export const Calendar = () => {
 
       if (horaspontoError) throw horaspontoError;
 
-      // Fetch records data
       const { data: recordsData, error: recordsError } = await supabase
         .from('records')
         .select('date, worked_hours')
@@ -67,7 +63,6 @@ export const Calendar = () => {
 
       if (recordsError) throw recordsError;
 
-      // Combine data by date
       const dataByDate: { [key: string]: DayData } = {};
 
       calendarDays.forEach(day => {
@@ -119,15 +114,15 @@ export const Calendar = () => {
     const dayData = getDayData(date);
 
     if (!dayData || !dayData.hasRecords) {
-      return 'none'; // Gray
+      return 'none';
     }
 
     if (dayData.totalHours === dayData.distributedHours && dayData.totalHours > 0) {
-      return 'complete'; // Blue - horas completas e distribuídas
+      return 'complete';
     }
 
     if (dayData.distributedHours > 0 || dayData.totalHours > 0) {
-      return 'partial'; // Red - parcial ou pendente
+      return 'partial';
     }
 
     return 'none';
@@ -164,7 +159,16 @@ export const Calendar = () => {
 
   const handleDayClick = (date: Date) => {
     if (isSameMonth(date, currentDate)) {
+      const dayData = getDayData(date);
       setSelectedDate(date);
+      
+      // If there are already registered hours, start with projects tab
+      if (dayData && dayData.totalHours > 0) {
+        setStartWithProjectsTab(true);
+      } else {
+        setStartWithProjectsTab(false);
+      }
+      
       setIsFormVisible(true);
     }
   };
@@ -172,10 +176,10 @@ export const Calendar = () => {
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
-    <div className="flex space-x-6">
-      {/* Calendar */}
-      <div className="flex-1 space-y-6">
-        <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 max-w-4xl mx-auto">
+    <div className="flex space-x-4">
+      {/* Calendar - moved slightly left */}
+      <div className="flex-1 max-w-4xl space-y-6">
+        <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-2xl font-bold text-white">
@@ -210,16 +214,13 @@ export const Calendar = () => {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2 mb-4 max-w-2xl mx-auto">
-              {/* Week day headers */}
+            <div className="grid grid-cols-7 gap-2 mb-4">
               {weekDays.map((day) => (
                 <div key={day} className="text-center font-medium text-gray-400 py-2">
                   {day}
                 </div>
               ))}
               
-              {/* Calendar days */}
               {calendarDays.map((date) => {
                 const dayData = getDayData(date);
                 return (
@@ -246,7 +247,6 @@ export const Calendar = () => {
               })}
             </div>
 
-            {/* Legend */}
             <div className="flex items-center justify-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-gradient-to-br from-blue-600 to-blue-700 rounded" />
@@ -265,11 +265,12 @@ export const Calendar = () => {
         </Card>
       </div>
 
-      {/* Hours Registration Form */}
+      {/* Hours Registration Form - expanded */}
       <HoursRegistrationForm
         date={selectedDate}
         isVisible={isFormVisible}
         onClose={() => setIsFormVisible(false)}
+        startWithProjectsTab={startWithProjectsTab}
       />
     </div>
   );

@@ -1,37 +1,42 @@
-
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, FolderOpen, Calendar, Settings, Eye, Trash2, Search } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { Plus, Search, Trash2, FolderOpen, Calendar, Users } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { ProjectDetailsModal } from '@/components/projects/ProjectDetailsModal';
 
 interface Project {
   id: string;
   name: string;
-  description?: string;
-  status?: string;
-  created_at: string;
+  description: string | null;
+  status: string | null;
+  created_at: string | null;
 }
 
-const Projects = () => {
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+export default function Projects() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const { toast } = useToast();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch projects
-  const { data: projects, isLoading } = useQuery({
+  const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -44,262 +49,219 @@ const Projects = () => {
     },
   });
 
-  // Filter projects based on search term
-  const filteredProjects = projects?.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
-
-  // Create project mutation
-  const createProjectMutation = useMutation({
-    mutationFn: async (name: string) => {
-      if (!user) {
-        throw new Error('Usuário não encontrado');
-      }
-      
-      console.log('Creating project:', {
-        name,
-        userId: user.id,
-        userEmail: user.email
-      });
-      
-      const { data, error } = await supabase
-        .from('projects')
-        .insert({
-          name: name,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error creating project:', error);
-        throw error;
-      }
-      
-      console.log('Project created successfully:', data);
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setNewProjectName('');
-      setIsCreateModalOpen(false);
-      toast({
-        title: "Projeto criado com sucesso!",
-        description: "Você pode agora adicionar etapas e tarefas ao projeto.",
-      });
-    },
-    onError: (error) => {
-      console.error('Project creation failed:', error);
-      toast({
-        title: "Erro ao criar projeto",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Delete project mutation
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId: string) => {
       const { error } = await supabase
         .from('projects')
         .delete()
         .eq('id', projectId);
-
+      
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast({
         title: "Projeto excluído com sucesso!",
-        description: "O projeto foi removido permanentemente.",
+        description: "O projeto foi removido do sistema.",
       });
+      setShowDeleteConfirmation(false);
+      setProjectToDelete(null);
     },
     onError: (error) => {
+      console.error('Erro ao excluir projeto:', error);
       toast({
         title: "Erro ao excluir projeto",
-        description: error.message,
+        description: "Não foi possível excluir o projeto. Tente novamente.",
         variant: "destructive",
       });
     },
   });
 
-  const handleCreateProject = () => {
-    if (newProjectName.trim()) {
-      createProjectMutation.mutate(newProjectName.trim());
+  const handleNewProject = () => {
+    setSelectedProject(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditProject = (project: Project) => {
+    setSelectedProject(project);
+    setIsModalOpen(true);
+  };
+
+  const confirmDeleteProject = (project: Project) => {
+    setProjectToDelete(project);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteProject = () => {
+    if (projectToDelete) {
+      deleteProjectMutation.mutate(projectToDelete.id);
     }
   };
 
-  const handleDeleteProject = (projectId: string, projectName: string) => {
-    if (confirm(`Tem certeza que deseja excluir o projeto "${projectName}"? Esta ação não pode ser desfeita.`)) {
-      deleteProjectMutation.mutate(projectId);
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'ativo':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'pausado':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'concluido':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'cancelado':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  const filteredProjects = projects.filter(project =>
+    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Projetos</h1>
-          <p className="text-gray-600 dark:text-gray-400">Gerencie seus projetos, etapas e tarefas</p>
-          {user && (
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-              Logado como: {user.email}
-            </p>
-          )}
+    <>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Projetos</h1>
+            <p className="text-gray-600 dark:text-gray-400">Gerencie seus projetos e acompanhe o progresso</p>
+          </div>
+          <Button onClick={handleNewProject} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Projeto
+          </Button>
         </div>
-        
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Projeto
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 dark:text-white">Criar Novo Projeto</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="projectName" className="text-gray-700 dark:text-gray-300">Nome do Projeto</Label>
-                <Input
-                  id="projectName"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="Digite o nome do projeto"
-                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white"
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateProject()}
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white"
-                >
-                  Cancelar
+
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Pesquisar projetos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Projects Grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="animate-pulse">
+                <CardHeader>
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-gray-200 rounded"></div>
+                    <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <Card className="p-12">
+            <div className="text-center">
+              <FolderOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                {searchQuery ? 'Nenhum projeto encontrado' : 'Nenhum projeto cadastrado'}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                {searchQuery ? 'Tente ajustar sua pesquisa' : 'Comece criando seu primeiro projeto'}
+              </p>
+              {!searchQuery && (
+                <Button onClick={handleNewProject} className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Primeiro Projeto
                 </Button>
-                <Button
-                  onClick={handleCreateProject}
-                  disabled={!newProjectName.trim() || createProjectMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {createProjectMutation.isPending ? 'Criando...' : 'Criar Projeto'}
-                </Button>
-              </div>
+              )}
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Search Bar */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <Input
-          placeholder="Pesquisar projetos..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects?.map((project) => (
-          <Card key={project.id} className="corporate-card dark:corporate-card-dark hover:shadow-lg transition-all duration-300">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <FolderOpen className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-gray-900 dark:text-white text-lg">{project.name}</CardTitle>
-                    <CardDescription className="text-gray-600 dark:text-gray-400">
-                      Criado em {new Date(project.created_at).toLocaleDateString('pt-BR')}
-                    </CardDescription>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                    {project.status || 'Ativo'}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteProject(project.id, project.name)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 text-sm">
-                <Calendar className="h-4 w-4 text-blue-500" />
-                <span>Atualizado em {new Date(project.created_at).toLocaleDateString('pt-BR')}</span>
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-slate-700"
-                  onClick={() => setSelectedProjectId(project.id)}
-                >
-                  <Settings className="h-4 w-4 mr-1" />
-                  Gerenciar
-                </Button>
-                <Button 
-                  size="sm" 
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => setSelectedProjectId(project.id)}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  Detalhes
-                </Button>
-              </div>
-            </CardContent>
           </Card>
-        ))}
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProjects.map((project) => (
+              <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer group">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1" onClick={() => handleEditProject(project)}>
+                      <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">
+                        {project.name}
+                      </CardTitle>
+                      <div className="flex items-center space-x-2 mt-2">
+                        <Badge className={getStatusColor(project.status)}>
+                          {project.status || 'aberto'}
+                        </Badge>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {project.created_at && new Date(project.created_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDeleteProject(project);
+                      }}
+                      className="text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent onClick={() => handleEditProject(project)}>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
+                    {project.description || 'Sem descrição'}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>0 registros</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-3 w-3" />
+                        <span>0 colaboradores</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
-
-      {filteredProjects?.length === 0 && projects?.length > 0 && (
-        <div className="text-center py-12">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <Search className="h-8 w-8 text-blue-600" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">Nenhum projeto encontrado</p>
-          <p className="text-gray-500 dark:text-gray-500 text-sm">Tente ajustar os termos de pesquisa</p>
-        </div>
-      )}
-
-      {projects?.length === 0 && (
-        <div className="text-center py-12">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <FolderOpen className="h-8 w-8 text-blue-600" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">Nenhum projeto encontrado</p>
-          <p className="text-gray-500 dark:text-gray-500 text-sm">Crie seu primeiro projeto para começar</p>
-        </div>
-      )}
 
       <ProjectDetailsModal
-        projectId={selectedProjectId}
-        isOpen={!!selectedProjectId}
-        onClose={() => setSelectedProjectId(null)}
+        project={selectedProject}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
       />
-    </div>
-  );
-};
 
-export default Projects;
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Projeto</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem certeza que deseja excluir o projeto "{projectToDelete?.name}"? 
+              Esta ação não pode ser desfeita e todos os registros de horas associados serão perdidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteProject}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteProjectMutation.isPending}
+            >
+              {deleteProjectMutation.isPending ? 'Excluindo...' : 'Sim, Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
