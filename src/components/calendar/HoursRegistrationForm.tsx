@@ -3,62 +3,35 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle 
-} from '@/components/ui/alert-dialog';
-import { Clock, FolderOpen, Plus, Trash2, X, Edit } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, Plus, Trash2, Clock, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { parseTimeInput, formatTimeToDisplay, formatTimeToDecimal } from '@/utils/timeUtils';
+import { toast } from 'sonner';
 
 interface HoursRegistrationFormProps {
   date: Date | null;
   isVisible: boolean;
   onClose: () => void;
-  onProjectAdded?: () => void;
+  onProjectAdded: () => void;
   startWithProjectsTab?: boolean;
 }
 
-interface TimeEntry {
-  id: string;
-  projeto: string;
-  etapa: string;
-  tarefa: string;
-  horas: number;
-  horasInput: string;
-  descricao: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-}
-
-interface Stage {
-  id: string;
-  name: string;
+interface ProjectRecord {
+  id?: string;
   project_id: string;
-}
-
-interface Task {
-  id: string;
-  name: string;
-  stage_id: string;
+  project_name?: string;
+  stage_id?: string;
+  stage_name?: string;
+  task_id?: string;
+  task_name?: string;
+  worked_hours: number;
+  description?: string;
+  percentage?: number;
 }
 
 export const HoursRegistrationForm = ({ 
@@ -68,63 +41,61 @@ export const HoursRegistrationForm = ({
   onProjectAdded,
   startWithProjectsTab = false 
 }: HoursRegistrationFormProps) => {
-  const [totalHoursInput, setTotalHoursInput] = useState<string>('');
-  const [totalHours, setTotalHours] = useState<number>(0);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [showEditConfirmation, setShowEditConfirmation] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('ponto');
-  const { toast } = useToast();
+  const [totalHours, setTotalHours] = useState(0);
+  const [isEditingHours, setIsEditingHours] = useState(false);
+  const [projectRecords, setProjectRecords] = useState<ProjectRecord[]>([]);
+  const [activeTab, setActiveTab] = useState(startWithProjectsTab ? 'projects' : 'hours');
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch existing data for the selected date
-  const { data: existingData, refetch: refetchExistingData } = useQuery({
-    queryKey: ['day-data', date ? format(date, 'yyyy-MM-dd') : null, user?.id],
+  const { data: existingData } = useQuery({
+    queryKey: ['day-data', date?.toISOString().split('T')[0], user?.id],
     queryFn: async () => {
       if (!date || !user?.id) return null;
 
       const dateStr = format(date, 'yyyy-MM-dd');
 
-      // Fetch horasponto data
       const { data: horaspontoData } = await supabase
         .from('horasponto')
-        .select('total_hours')
+        .select('*')
         .eq('user_id', user.id)
         .eq('date', dateStr)
         .maybeSingle();
 
-      // Fetch records data
       const { data: recordsData } = await supabase
         .from('records')
-        .select('id, project_id, stage_id, task_id, worked_hours, description')
+        .select(`
+          *,
+          projects!inner(name),
+          stages(name),
+          tasks(name)
+        `)
         .eq('user_id', user.id)
         .eq('date', dateStr);
 
       return {
-        totalHours: horaspontoData?.total_hours || 0,
+        horasponto: horaspontoData,
         records: recordsData || []
       };
     },
-    enabled: isVisible && !!date && !!user?.id,
+    enabled: !!date && !!user?.id && isVisible,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
+        .eq('status', 'aberto')
         .order('name');
       
       if (error) throw error;
-      return data as Project[];
+      return data;
     },
-    enabled: isVisible && !!user,
   });
 
-  const { data: stages = [] } = useQuery({
+  const { data: stages } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -133,12 +104,11 @@ export const HoursRegistrationForm = ({
         .order('name');
       
       if (error) throw error;
-      return data as Stage[];
+      return data;
     },
-    enabled: isVisible && !!user,
   });
 
-  const { data: tasks = [] } = useQuery({
+  const { data: tasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -147,580 +117,359 @@ export const HoursRegistrationForm = ({
         .order('name');
       
       if (error) throw error;
-      return data as Task[];
+      return data;
     },
-    enabled: isVisible && !!user,
   });
 
-  // Load existing data when component opens
+  // Set initial data when available
   useEffect(() => {
-    if (existingData && isVisible) {
-      if (existingData.totalHours > 0) {
-        setTotalHours(existingData.totalHours);
-        setTotalHoursInput(formatTimeToDisplay(existingData.totalHours));
-      }
-
+    if (existingData) {
+      setTotalHours(existingData.horasponto?.total_hours || 0);
+      setIsEditingHours(false);
+      
       if (existingData.records.length > 0) {
-        const entries = existingData.records.map((record: any) => ({
+        const mappedRecords = existingData.records.map(record => ({
           id: record.id,
-          projeto: record.project_id || '',
-          etapa: record.stage_id || '',
-          tarefa: record.task_id || '',
-          horas: record.worked_hours,
-          horasInput: formatTimeToDisplay(record.worked_hours),
-          descricao: record.description || '',
+          project_id: record.project_id || '',
+          project_name: record.projects?.name || '',
+          stage_id: record.stage_id || '',
+          stage_name: record.stages?.name || '',
+          task_id: record.task_id || '',
+          task_name: record.tasks?.name || '',
+          worked_hours: Number(record.worked_hours),
+          description: record.description || '',
+          percentage: Number(record.percentage) || 0,
         }));
-        setTimeEntries(entries);
+        setProjectRecords(mappedRecords);
+        setActiveTab('projects');
       }
-
-      // Set initial tab based on prop
-      if (startWithProjectsTab && existingData.totalHours > 0) {
-        setActiveTab('projetos');
-      } else {
-        setActiveTab('ponto');
-      }
+    } else {
+      setTotalHours(0);
+      setProjectRecords([]);
+      setIsEditingHours(false);
     }
-  }, [existingData, isVisible, startWithProjectsTab]);
+  }, [existingData]);
 
-  // Save hours mutation
   const saveHoursMutation = useMutation({
-    mutationFn: async (data: { totalHours: number; entries: TimeEntry[] }) => {
-      if (!date || !user?.id) {
-        throw new Error('Data ou usuário não encontrado');
-      }
+    mutationFn: async (hours: number) => {
+      if (!date || !user?.id) throw new Error('Missing date or user');
 
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      const { data: horaspontoData, error: horaspontoError } = await supabase
+      const { error } = await supabase
         .from('horasponto')
         .upsert({
           user_id: user.id,
           date: dateStr,
-          total_hours: formatTimeToDecimal(data.totalHours),
-        })
-        .select()
-        .single();
+          total_hours: hours,
+        });
 
-      if (horaspontoError) throw horaspontoError;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Horas registradas com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['day-data'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-data'] });
+      setIsEditingHours(false);
+      onProjectAdded();
+    },
+    onError: () => {
+      toast.error('Erro ao registrar horas');
+    },
+  });
 
+  const saveProjectsMutation = useMutation({
+    mutationFn: async (records: ProjectRecord[]) => {
+      if (!date || !user?.id) throw new Error('Missing date or user');
+
+      const dateStr = format(date, 'yyyy-MM-dd');
+
+      // Delete existing records for this date
       await supabase
         .from('records')
         .delete()
         .eq('user_id', user.id)
         .eq('date', dateStr);
 
-      // Auto-distribute hours if not filled
-      let entriesToSave = [...data.entries];
-      const entriesWithHours = entriesToSave.filter(entry => entry.projeto && entry.horas > 0);
-      const entriesWithoutHours = entriesToSave.filter(entry => entry.projeto && entry.horas === 0);
+      // Insert new records
+      const recordsToInsert = records.map(record => ({
+        user_id: user.id,
+        date: dateStr,
+        project_id: record.project_id || null,
+        stage_id: record.stage_id || null,
+        task_id: record.task_id || null,
+        worked_hours: record.worked_hours,
+        description: record.description || null,
+        percentage: record.percentage || null,
+      }));
 
-      if (entriesWithoutHours.length > 0) {
-        const totalDistributed = entriesWithHours.reduce((sum, entry) => sum + entry.horas, 0);
-        const remainingHours = data.totalHours - totalDistributed;
-        
-        if (remainingHours > 0) {
-          const hoursPerEntry = remainingHours / entriesWithoutHours.length;
-          entriesWithoutHours.forEach(entry => {
-            entry.horas = hoursPerEntry;
-          });
-        }
-      }
+      const { error } = await supabase
+        .from('records')
+        .insert(recordsToInsert);
 
-      for (const entry of entriesToSave) {
-        if (entry.projeto && entry.horas > 0) {
-          const { error: recordError } = await supabase
-            .from('records')
-            .insert({
-              user_id: user.id,
-              date: dateStr,
-              project_id: entry.projeto,
-              stage_id: entry.etapa || null,
-              task_id: entry.tarefa || null,
-              worked_hours: formatTimeToDecimal(entry.horas),
-              description: entry.descricao || null,
-              horasponto_id: horaspontoData.id,
-            });
-
-          if (recordError) throw recordError;
-        }
-      }
+      if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['calendar-data'] });
+      toast.success('Projetos salvos com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['day-data'] });
-      
-      // Refetch existing data to update the form
-      refetchExistingData();
-      
-      // Call the callback to update parent component
-      if (onProjectAdded) {
-        onProjectAdded();
-      }
-      
-      toast({
-        title: "Horas registradas com sucesso!",
-        description: `Registrado ${formatTimeToDisplay(getTotalDistributedHours())} de ${formatTimeToDisplay(totalHours)} para ${date ? format(date, 'dd/MM/yyyy') : ''}`,
-      });
-      
-      // Don't close the form, just show success message
+      queryClient.invalidateQueries({ queryKey: ['calendar-data'] });
+      onProjectAdded();
     },
-    onError: (error) => {
-      console.error('Erro ao salvar horas:', error);
-      toast({
-        title: "Erro ao registrar horas",
-        description: error.message,
-        variant: "destructive",
-      });
+    onError: () => {
+      toast.error('Erro ao salvar projetos');
     },
   });
 
-  const resetForm = () => {
-    setTotalHoursInput('');
-    setTotalHours(0);
-    setTimeEntries([]);
+  const handleSaveHours = () => {
+    saveHoursMutation.mutate(totalHours);
   };
 
-  const handleTotalHoursChange = (input: string) => {
-    setTotalHoursInput(input);
-    const parsed = parseTimeInput(input);
-    setTotalHours(parsed);
-  };
-
-  const handleEditPointHours = () => {
-    setShowEditConfirmation(true);
-  };
-
-  const confirmEditPointHours = () => {
-    setActiveTab('ponto');
-    setShowEditConfirmation(false);
-  };
-
-  const addTimeEntry = () => {
-    const newEntry: TimeEntry = {
-      id: Date.now().toString(),
-      projeto: '',
-      etapa: '',
-      tarefa: '',
-      horas: 0,
-      horasInput: '',
-      descricao: '',
-    };
-    setTimeEntries([...timeEntries, newEntry]);
-  };
-
-  const confirmRemoveTimeEntry = (id: string) => {
-    setEntryToDelete(id);
-    setShowDeleteConfirmation(true);
-  };
-
-  const removeTimeEntry = () => {
-    if (entryToDelete) {
-      setTimeEntries(timeEntries.filter(entry => entry.id !== entryToDelete));
-      setEntryToDelete(null);
-      setShowDeleteConfirmation(false);
-    }
-  };
-
-  const updateTimeEntry = (id: string, field: keyof TimeEntry, value: string | number) => {
-    setTimeEntries(timeEntries.map(entry => {
-      if (entry.id === id) {
-        if (field === 'horasInput') {
-          const parsed = parseTimeInput(value as string);
-          return { ...entry, horasInput: value as string, horas: parsed };
-        }
-        if (field === 'projeto') {
-          return { ...entry, projeto: value as string, etapa: '', tarefa: '' };
-        }
-        if (field === 'etapa') {
-          return { ...entry, etapa: value as string, tarefa: '' };
-        }
-        return { ...entry, [field]: value };
-      }
-      return entry;
-    }));
-  };
-
-  const getTotalDistributedHours = () => {
-    return timeEntries.reduce((sum, entry) => sum + entry.horas, 0);
-  };
-
-  const handleSave = async () => {
-    if (!user) {
-      toast({
-        title: "Erro",
-        description: "Usuário não autenticado",
-        variant: "destructive",
-      });
+  const handleSaveProjects = () => {
+    if (projectRecords.length === 0) {
+      toast.error('Adicione pelo menos um projeto');
       return;
     }
 
-    if (totalHours <= 0) {
-      toast({
-        title: "Erro",
-        description: "Digite o total de horas trabalhadas",
-        variant: "destructive",
-      });
-      return;
+    // Auto-distribute hours if not manually set
+    const totalDistributedHours = projectRecords.reduce((sum, record) => sum + record.worked_hours, 0);
+    
+    if (totalDistributedHours === 0 && totalHours > 0) {
+      const hoursPerProject = totalHours / projectRecords.length;
+      const updatedRecords = projectRecords.map(record => ({
+        ...record,
+        worked_hours: hoursPerProject,
+      }));
+      setProjectRecords(updatedRecords);
+      saveProjectsMutation.mutate(updatedRecords);
+    } else {
+      saveProjectsMutation.mutate(projectRecords);
     }
-
-    saveHoursMutation.mutate({ totalHours, entries: timeEntries });
   };
 
-  const getFilteredStages = (projectId: string) => {
-    return stages.filter(stage => stage.project_id === projectId);
+  const addProjectRecord = () => {
+    setProjectRecords([...projectRecords, {
+      project_id: '',
+      worked_hours: 0,
+      description: '',
+    }]);
   };
 
-  const getFilteredTasks = (stageId: string) => {
-    return tasks.filter(task => task.stage_id === stageId);
+  const updateProjectRecord = (index: number, field: keyof ProjectRecord, value: any) => {
+    const updated = [...projectRecords];
+    updated[index] = { ...updated[index], [field]: value };
+    setProjectRecords(updated);
   };
 
-  const isDataComplete = totalHours > 0 && Math.abs(getTotalDistributedHours() - totalHours) < 0.01;
-  const remainingHours = totalHours - getTotalDistributedHours();
-
-  useEffect(() => {
-    if (!isVisible) {
-      resetForm();
-    }
-  }, [isVisible]);
+  const removeProjectRecord = (index: number) => {
+    setProjectRecords(projectRecords.filter((_, i) => i !== index));
+  };
 
   if (!isVisible || !date) return null;
 
+  const hasExistingHours = existingData?.horasponto?.total_hours > 0;
+
   return (
-    <>
-      {/* Expanded form width */}
-      <div className="w-[600px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 h-full overflow-y-auto shadow-xl">
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Clock className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Registro de Horas</h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {format(date, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </p>
-              </div>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onClose} className="text-gray-500 hover:text-gray-700">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
+    <div className="w-96">
+      <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-lg font-semibold text-white">
+            {format(date, "d 'de' MMMM, yyyy", { locale: ptBR })}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-10">
-              <TabsTrigger value="ponto">Registro de Ponto</TabsTrigger>
-              <TabsTrigger value="projetos">Distribuição de Horas</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-slate-700">
+              <TabsTrigger value="hours" className="text-white data-[state=active]:bg-blue-600">
+                Ponto
+              </TabsTrigger>
+              <TabsTrigger value="projects" className="text-white data-[state=active]:bg-blue-600">
+                Projetos
+              </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="ponto" className="space-y-4 mt-6">
-              <Card className="shadow-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-blue-600" />
-                      <span>Total de Horas Trabalhadas</span>
-                    </CardTitle>
-                    {existingData?.totalHours > 0 && (
+            
+            <TabsContent value="hours" className="space-y-4">
+              {hasExistingHours && !isEditingHours ? (
+                <div className="flex items-center justify-between p-4 bg-slate-700 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="h-4 w-4 text-blue-400" />
+                    <span className="text-white font-medium">
+                      {existingData.horasponto.total_hours}h registradas
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingHours(true)}
+                    className="p-2 text-gray-400 hover:text-white"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="totalHours" className="text-gray-300">
+                      Total de Horas
+                    </Label>
+                    <Input
+                      id="totalHours"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="24"
+                      value={totalHours}
+                      onChange={(e) => setTotalHours(Number(e.target.value))}
+                      className="bg-slate-700 border-slate-600 text-white"
+                      placeholder="8.0"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button 
+                      onClick={handleSaveHours}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      disabled={saveHoursMutation.isPending}
+                    >
+                      {saveHoursMutation.isPending ? 'Salvando...' : 'Salvar Horas'}
+                    </Button>
+                    {isEditingHours && (
                       <Button
                         variant="outline"
-                        size="sm"
-                        onClick={handleEditPointHours}
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        onClick={() => {
+                          setIsEditingHours(false);
+                          setTotalHours(existingData?.horasponto?.total_hours || 0);
+                        }}
+                        className="border-slate-600 text-gray-300 hover:bg-slate-700"
                       >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Editar
+                        Cancelar
                       </Button>
                     )}
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {existingData?.totalHours > 0 && activeTab === 'ponto' ? (
-                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="flex items-center justify-between">
-                        <span className="text-green-800 dark:text-green-200 font-medium">
-                          Horas já registradas: {formatTimeToDisplay(existingData.totalHours)}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="totalHours" className="font-medium">Horas trabalhadas no dia</Label>
-                        <Input
-                          id="totalHours"
-                          value={totalHoursInput}
-                          onChange={(e) => handleTotalHoursChange(e.target.value)}
-                          placeholder="Ex: 8 ou 730 (7:30)"
-                          className="h-10"
-                        />
-                        {totalHours > 0 && (
-                          <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Equivale a:</span>
-                            <span className="font-semibold text-blue-600">
-                              {formatTimeToDisplay(totalHours)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                        <p><strong>Dicas:</strong></p>
-                        <p>• Digite "8" para 8:00 horas</p>
-                        <p>• Digite "730" para 7:30 horas</p>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="projetos" className="space-y-4 mt-6">
-              <Card className="shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                  <CardTitle className="text-lg flex items-center space-x-2">
-                    <FolderOpen className="h-4 w-4 text-blue-600" />
-                    <span>Distribuição por Projeto</span>
-                  </CardTitle>
-                  <Button onClick={addTimeEntry} size="sm" className="bg-blue-600 hover:bg-blue-700 h-8 px-3">
-                    <Plus className="h-3 w-3 mr-1" />
-                    Adicionar
+            <TabsContent value="projects" className="space-y-4">
+              {!hasExistingHours && (
+                <div className="p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
+                  <p className="text-yellow-200 text-sm">
+                    ⚠️ Registre primeiro as horas do ponto para distribuir entre projetos.
+                  </p>
+                </div>
+              )}
+              
+              <div className="space-y-3">
+                {projectRecords.map((record, index) => (
+                  <div key={index} className="p-4 bg-slate-700 rounded-lg space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-white font-medium">Projeto {index + 1}</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeProjectRecord(index)}
+                        className="text-red-400 hover:text-red-300 p-1"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-gray-300">Projeto</Label>
+                        <Select
+                          value={record.project_id}
+                          onValueChange={(value) => {
+                            const project = projects?.find(p => p.id === value);
+                            updateProjectRecord(index, 'project_id', value);
+                            updateProjectRecord(index, 'project_name', project?.name || '');
+                          }}
+                        >
+                          <SelectTrigger className="bg-slate-600 border-slate-500 text-white">
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {projects?.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-gray-300">Horas</Label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={record.worked_hours}
+                          onChange={(e) => updateProjectRecord(index, 'worked_hours', Number(e.target.value))}
+                          className="bg-slate-600 border-slate-500 text-white"
+                          placeholder="0.0"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-gray-300">Descrição (opcional)</Label>
+                      <Input
+                        value={record.description || ''}
+                        onChange={(e) => updateProjectRecord(index, 'description', e.target.value)}
+                        className="bg-slate-600 border-slate-500 text-white"
+                        placeholder="Descreva o trabalho realizado..."
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={addProjectRecord}
+                  variant="outline"
+                  className="w-full border-slate-600 text-gray-300 hover:bg-slate-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Projeto
+                </Button>
+
+                {projectRecords.length > 0 && (
+                  <Button 
+                    onClick={handleSaveProjects}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    disabled={saveProjectsMutation.isPending}
+                  >
+                    {saveProjectsMutation.isPending ? 'Salvando...' : 'Salvar Projetos'}
                   </Button>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {totalHours > 0 && (
-                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-amber-800 dark:text-amber-200">
-                          Total: <strong>{formatTimeToDisplay(totalHours)}</strong>
-                        </span>
-                        <span className="text-amber-800 dark:text-amber-200">
-                          Restante: <strong>{formatTimeToDisplay(Math.max(0, remainingHours))}</strong>
-                        </span>
-                      </div>
-                      {remainingHours < 0 && (
-                        <p className="text-red-600 text-xs mt-1">
-                          ⚠️ Distribuído {formatTimeToDisplay(Math.abs(remainingHours))} a mais
-                        </p>
-                      )}
-                    </div>
-                  )}
+                )}
+              </div>
 
-                  {timeEntries.length === 0 ? (
-                    <div className="text-center py-8 bg-gray-50 dark:bg-slate-800 rounded">
-                      <FolderOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">
-                        Nenhuma distribuição de horas
-                      </p>
-                      <p className="text-gray-500 dark:text-gray-500 text-xs">
-                        Clique em "Adicionar" para começar
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {timeEntries.map((entry, index) => (
-                        <Card key={entry.id} className="bg-gray-50 dark:bg-slate-800 border-l-4 border-l-blue-500">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between mb-4">
-                              <h4 className="font-medium text-gray-900 dark:text-white">
-                                Projeto #{index + 1}
-                              </h4>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => confirmRemoveTimeEntry(entry.id)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 h-6 w-6 p-0"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 gap-4">
-                              <div className="space-y-1">
-                                <Label className="text-sm font-medium">Projeto *</Label>
-                                <Select value={entry.projeto} onValueChange={(value) => updateTimeEntry(entry.id, 'projeto', value)}>
-                                  <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="Selecionar projeto" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {projects.map((project) => (
-                                      <SelectItem key={project.id} value={project.id}>
-                                        {project.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-sm font-medium">Etapa</Label>
-                                  <Select 
-                                    value={entry.etapa} 
-                                    onValueChange={(value) => updateTimeEntry(entry.id, 'etapa', value)}
-                                    disabled={!entry.projeto}
-                                  >
-                                    <SelectTrigger className="h-9">
-                                      <SelectValue placeholder="Selecionar etapa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {getFilteredStages(entry.projeto).map((stage) => (
-                                        <SelectItem key={stage.id} value={stage.id}>
-                                          {stage.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <Label className="text-sm font-medium">Tarefa</Label>
-                                  <Select 
-                                    value={entry.tarefa} 
-                                    onValueChange={(value) => updateTimeEntry(entry.id, 'tarefa', value)}
-                                    disabled={!entry.etapa}
-                                  >
-                                    <SelectTrigger className="h-9">
-                                      <SelectValue placeholder="Selecionar tarefa" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {getFilteredTasks(entry.etapa).map((task) => (
-                                        <SelectItem key={task.id} value={task.id}>
-                                          {task.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label className="text-sm font-medium">Horas Trabalhadas *</Label>
-                                <Input
-                                  value={entry.horasInput}
-                                  onChange={(e) => updateTimeEntry(entry.id, 'horasInput', e.target.value)}
-                                  placeholder="Ex: 2 ou 130 (1:30)"
-                                  className="h-9"
-                                />
-                                {entry.horas > 0 && (
-                                  <div className="flex items-center justify-between p-1 bg-blue-50 dark:bg-blue-900/20 rounded text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400">Equivale a:</span>
-                                    <span className="font-semibold text-blue-600">
-                                      {formatTimeToDisplay(entry.horas)}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label className="text-sm font-medium">Descrição</Label>
-                                <Textarea
-                                  value={entry.descricao}
-                                  onChange={(e) => updateTimeEntry(entry.id, 'descricao', e.target.value)}
-                                  placeholder="Descreva as atividades..."
-                                  className="min-h-[60px] resize-none text-sm"
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-
-                  {timeEntries.length > 0 && (
-                    <>
-                      <Separator />
-                      <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800 rounded">
-                        <div className="text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Distribuído:</span>
-                            <span className="font-semibold">{formatTimeToDisplay(getTotalDistributedHours())}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Total:</span>
-                            <span className="font-semibold">{formatTimeToDisplay(totalHours)}</span>
-                          </div>
-                        </div>
-                        <div className={`px-2 py-1 rounded text-xs font-bold ${
-                          isDataComplete 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                          {isDataComplete ? '✓ Completo' : '⚠ Incompleto'}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+              {totalHours > 0 && projectRecords.length > 0 && (
+                <div className="p-3 bg-slate-700 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-300">Total disponível:</span>
+                    <span className="text-white">{totalHours}h</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-300">Total distribuído:</span>
+                    <span className="text-white">
+                      {projectRecords.reduce((sum, record) => sum + record.worked_hours, 0)}h
+                    </span>
+                  </div>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-            <Button variant="outline" onClick={onClose} className="h-9 px-4">
-              Fechar
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saveHoursMutation.isPending || totalHours <= 0}
-              className="bg-blue-600 hover:bg-blue-700 h-9 px-4"
-            >
-              {saveHoursMutation.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                  Salvando...
-                </>
-              ) : (
-                'Salvar Horas'
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Confirmation Dialog */}
-      <AlertDialog open={showEditConfirmation} onOpenChange={setShowEditConfirmation}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Editar Horas de Ponto</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você deseja editar as horas de ponto já registradas para este dia? 
-              Esta ação permitirá que você altere o total de horas trabalhadas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmEditPointHours}>
-              Sim, Editar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Distribuição</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você tem certeza que deseja excluir esta distribuição de horas? 
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={removeTimeEntry}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Sim, Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 };

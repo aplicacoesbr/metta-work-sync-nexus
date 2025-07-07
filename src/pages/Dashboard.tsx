@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Calendar } from '@/components/calendar/Calendar';
+import { ProjectAnalysis } from '@/components/dashboard/ProjectAnalysis';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, FolderOpen, Users, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -116,6 +117,9 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Project Analysis */}
+      <ProjectAnalysis />
 
       {/* Calendar Component */}
       <Card className="corporate-card dark:corporate-card-dark">

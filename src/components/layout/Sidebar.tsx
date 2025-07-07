@@ -60,7 +60,7 @@ export const Sidebar = () => {
     },
   ];
 
-  // Filter items based on permissions
+  // Only show items that the user has permission to see
   const visibleItems = navigationItems.filter(item => item.show);
 
   if (isLoading) {
@@ -84,7 +84,7 @@ export const Sidebar = () => {
       <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
         {!isCollapsed && (
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Metta Sync
+            Work<span className="text-blue-400">Sync</span>
           </h2>
         )}
         <Button
