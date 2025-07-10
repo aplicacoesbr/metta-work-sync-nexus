@@ -1,7 +1,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Calendar } from '@/components/calendar/Calendar';
+import { WeekCalendar } from '@/components/calendar/WeekCalendar';
 import { ProjectAnalysis } from '@/components/dashboard/ProjectAnalysis';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, FolderOpen, Users, TrendingUp } from 'lucide-react';
@@ -14,17 +14,14 @@ const Dashboard = () => {
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      // Fetch projects count
       const { data: projects } = await supabase
         .from('projects')
         .select('id');
 
-      // Fetch users count
       const { data: users } = await supabase
         .from('profiles')
         .select('id');
 
-      // Fetch today's hours for current user
       const today = new Date().toISOString().split('T')[0];
       const { data: todayHours } = await supabase
         .from('records')
@@ -32,7 +29,6 @@ const Dashboard = () => {
         .eq('user_id', user?.id)
         .eq('date', today);
 
-      // Fetch total hours this month
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
         .toISOString().split('T')[0];
       const { data: monthHours } = await supabase
@@ -121,16 +117,16 @@ const Dashboard = () => {
       {/* Project Analysis */}
       <ProjectAnalysis />
 
-      {/* Calendar Component */}
+      {/* Week Calendar Component */}
       <Card className="corporate-card dark:corporate-card-dark">
         <CardHeader>
-          <CardTitle className="text-gray-900 dark:text-white">Calendário de Horas</CardTitle>
+          <CardTitle className="text-gray-900 dark:text-white">Calendário Semanal</CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
-            Registre e visualize suas horas trabalhadas
+            Visualize e registre suas horas trabalhadas por semana
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Calendar />
+        <CardContent className="p-0">
+          <WeekCalendar />
         </CardContent>
       </Card>
     </div>
