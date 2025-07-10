@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,52 +46,72 @@ export const Calendar = () => {
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      const { data: horaspontoData, error: horaspontoError } = await supabase
-        .from('horasponto')
-        .select('date, total_hours')
-        .eq('user_id', user.id)
-        .gte('date', startStr)
-        .lte('date', endStr);
+      console.log('Fetching calendar data for period:', startStr, 'to', endStr);
+      console.log('User ID:', user.id);
 
-      if (horaspontoError) throw horaspontoError;
+      try {
+        const { data: horaspontoData, error: horaspontoError } = await supabase
+          .from('horasponto')
+          .select('date, total_hours')
+          .eq('user_id', user.id)
+          .gte('date', startStr)
+          .lte('date', endStr);
 
-      const { data: recordsData, error: recordsError } = await supabase
-        .from('records')
-        .select('date, worked_hours')
-        .eq('user_id', user.id)
-        .gte('date', startStr)
-        .lte('date', endStr);
-
-      if (recordsError) throw recordsError;
-
-      const dataByDate: { [key: string]: DayData } = {};
-
-      calendarDays.forEach(day => {
-        const dateStr = format(day, 'yyyy-MM-dd');
-        dataByDate[dateStr] = {
-          date: day,
-          totalHours: 0,
-          distributedHours: 0,
-          hasRecords: false,
-        };
-      });
-
-      horaspontoData?.forEach(hp => {
-        if (dataByDate[hp.date]) {
-          dataByDate[hp.date].totalHours = hp.total_hours;
-          dataByDate[hp.date].hasRecords = true;
+        if (horaspontoError) {
+          console.error('Error fetching horasponto:', horaspontoError);
+          throw horaspontoError;
         }
-      });
 
-      recordsData?.forEach(record => {
-        if (dataByDate[record.date]) {
-          dataByDate[record.date].distributedHours += record.worked_hours;
+        console.log('Horasponto data:', horaspontoData);
+
+        const { data: recordsData, error: recordsError } = await supabase
+          .from('records')
+          .select('date, worked_hours')
+          .eq('user_id', user.id)
+          .gte('date', startStr)
+          .lte('date', endStr);
+
+        if (recordsError) {
+          console.error('Error fetching records:', recordsError);
+          throw recordsError;
         }
-      });
 
-      return Object.values(dataByDate);
+        console.log('Records data:', recordsData);
+
+        const dataByDate: { [key: string]: DayData } = {};
+
+        calendarDays.forEach(day => {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          dataByDate[dateStr] = {
+            date: day,
+            totalHours: 0,
+            distributedHours: 0,
+            hasRecords: false,
+          };
+        });
+
+        horaspontoData?.forEach(hp => {
+          if (dataByDate[hp.date]) {
+            dataByDate[hp.date].totalHours = hp.total_hours;
+            dataByDate[hp.date].hasRecords = true;
+          }
+        });
+
+        recordsData?.forEach(record => {
+          if (dataByDate[record.date]) {
+            dataByDate[record.date].distributedHours += record.worked_hours;
+          }
+        });
+
+        return Object.values(dataByDate);
+      } catch (error) {
+        console.error('Error in calendar data query:', error);
+        throw error;
+      }
     },
     enabled: !!user?.id,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -133,7 +154,7 @@ export const Calendar = () => {
     const isCurrentMonth = isSameMonth(date, currentDate);
     const isCurrentDay = isToday(date);
 
-    let baseClass = "relative w-full h-12 p-2 rounded-lg transition-all duration-200 hover:scale-105 cursor-pointer ";
+    let baseClass = "relative w-full h-14 p-2 rounded-lg transition-all duration-200 hover:scale-105 cursor-pointer ";
 
     if (!isCurrentMonth) {
       baseClass += "text-gray-500 bg-slate-800/30 ";
@@ -162,7 +183,6 @@ export const Calendar = () => {
       const dayData = getDayData(date);
       setSelectedDate(date);
       
-      // If there are already registered hours, start with projects tab
       if (dayData && dayData.totalHours > 0) {
         setStartWithProjectsTab(true);
       } else {
@@ -175,23 +195,19 @@ export const Calendar = () => {
 
   const handleFormClose = () => {
     setIsFormVisible(false);
-    // Refetch calendar data when form closes to show updated information
     refetchCalendarData();
   };
 
-  // Keep the selected date and form visible when projects are added
   const handleProjectAdded = () => {
-    // Refetch calendar data to show updated information
     refetchCalendarData();
-    // Keep form visible and selected date unchanged
   };
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
-    <div className="flex space-x-4">
-      {/* Calendar - moved slightly left */}
-      <div className="flex-1 max-w-4xl space-y-6">
+    <div className="flex space-x-6">
+      {/* Calendar - increased size */}
+      <div className="flex-1 max-w-5xl space-y-6">
         <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -227,9 +243,9 @@ export const Calendar = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-2 mb-4">
+            <div className="grid grid-cols-7 gap-3 mb-4">
               {weekDays.map((day) => (
-                <div key={day} className="text-center font-medium text-gray-400 py-2">
+                <div key={day} className="text-center font-medium text-gray-400 py-3">
                   {day}
                 </div>
               ))}
@@ -278,7 +294,7 @@ export const Calendar = () => {
         </Card>
       </div>
 
-      {/* Hours Registration Form - expanded */}
+      {/* Hours Registration Form - increased size */}
       <HoursRegistrationForm
         date={selectedDate}
         isVisible={isFormVisible}

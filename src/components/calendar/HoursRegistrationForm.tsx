@@ -54,74 +54,117 @@ export const HoursRegistrationForm = ({
       if (!date || !user?.id) return null;
 
       const dateStr = format(date, 'yyyy-MM-dd');
+      console.log('Fetching existing data for date:', dateStr, 'user:', user.id);
 
-      const { data: horaspontoData } = await supabase
-        .from('horasponto')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', dateStr)
-        .maybeSingle();
+      try {
+        const { data: horaspontoData, error: horaspontoError } = await supabase
+          .from('horasponto')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('date', dateStr)
+          .maybeSingle();
 
-      const { data: recordsData } = await supabase
-        .from('records')
-        .select(`
-          *,
-          projects!inner(name),
-          stages(name),
-          tasks(name)
-        `)
-        .eq('user_id', user.id)
-        .eq('date', dateStr);
+        if (horaspontoError && horaspontoError.code !== 'PGRST116') {
+          console.error('Error fetching horasponto:', horaspontoError);
+          throw horaspontoError;
+        }
 
-      return {
-        horasponto: horaspontoData,
-        records: recordsData || []
-      };
+        const { data: recordsData, error: recordsError } = await supabase
+          .from('records')
+          .select(`
+            *,
+            projects!inner(name),
+            stages(name),
+            tasks(name)
+          `)
+          .eq('user_id', user.id)
+          .eq('date', dateStr);
+
+        if (recordsError) {
+          console.error('Error fetching records:', recordsError);
+          throw recordsError;
+        }
+
+        console.log('Existing data fetched:', { horaspontoData, recordsData });
+
+        return {
+          horasponto: horaspontoData,
+          records: recordsData || []
+        };
+      } catch (error) {
+        console.error('Error in existingData query:', error);
+        throw error;
+      }
     },
     enabled: !!date && !!user?.id && isVisible,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
+      console.log('Fetching projects...');
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .eq('status', 'aberto')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+      }
+      
+      console.log('Projects fetched:', data);
       return data;
     },
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const { data: stages } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
+      console.log('Fetching stages...');
       const { data, error } = await supabase
         .from('stages')
         .select('*')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching stages:', error);
+        throw error;
+      }
+      
+      console.log('Stages fetched:', data);
       return data;
     },
+    retry: 3,
+    retryDelay: 1000,
   });
 
   const { data: tasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
+      console.log('Fetching tasks...');
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        throw error;
+      }
+      
+      console.log('Tasks fetched:', data);
       return data;
     },
+    retry: 3,
+    retryDelay: 1000,
   });
 
-  // Set initial data when available
   useEffect(() => {
     if (existingData) {
       setTotalHours(existingData.horasponto?.total_hours || 0);
@@ -155,6 +198,7 @@ export const HoursRegistrationForm = ({
       if (!date || !user?.id) throw new Error('Missing date or user');
 
       const dateStr = format(date, 'yyyy-MM-dd');
+      console.log('Saving hours:', hours, 'for date:', dateStr);
       
       const { error } = await supabase
         .from('horasponto')
@@ -164,7 +208,10 @@ export const HoursRegistrationForm = ({
           total_hours: hours,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving hours:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       toast.success('Horas registradas com sucesso!');
@@ -173,7 +220,8 @@ export const HoursRegistrationForm = ({
       setIsEditingHours(false);
       onProjectAdded();
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Error in saveHoursMutation:', error);
       toast.error('Erro ao registrar horas');
     },
   });
@@ -183,15 +231,14 @@ export const HoursRegistrationForm = ({
       if (!date || !user?.id) throw new Error('Missing date or user');
 
       const dateStr = format(date, 'yyyy-MM-dd');
+      console.log('Saving projects for date:', dateStr, 'records:', records);
 
-      // Delete existing records for this date
       await supabase
         .from('records')
         .delete()
         .eq('user_id', user.id)
         .eq('date', dateStr);
 
-      // Insert new records
       const recordsToInsert = records.map(record => ({
         user_id: user.id,
         date: dateStr,
@@ -207,7 +254,10 @@ export const HoursRegistrationForm = ({
         .from('records')
         .insert(recordsToInsert);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving projects:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       toast.success('Projetos salvos com sucesso!');
@@ -215,7 +265,8 @@ export const HoursRegistrationForm = ({
       queryClient.invalidateQueries({ queryKey: ['calendar-data'] });
       onProjectAdded();
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Error in saveProjectsMutation:', error);
       toast.error('Erro ao salvar projetos');
     },
   });
@@ -230,7 +281,6 @@ export const HoursRegistrationForm = ({
       return;
     }
 
-    // Auto-distribute hours if not manually set
     const totalDistributedHours = projectRecords.reduce((sum, record) => sum + record.worked_hours, 0);
     
     if (totalDistributedHours === 0 && totalHours > 0) {
@@ -269,7 +319,7 @@ export const HoursRegistrationForm = ({
   const hasExistingHours = existingData?.horasponto?.total_hours > 0;
 
   return (
-    <div className="w-96">
+    <div className="w-[450px]">
       <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-lg font-semibold text-white">
@@ -365,7 +415,7 @@ export const HoursRegistrationForm = ({
                 </div>
               )}
               
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {projectRecords.map((record, index) => (
                   <div key={index} className="p-4 bg-slate-700 rounded-lg space-y-3">
                     <div className="flex justify-between items-center">
