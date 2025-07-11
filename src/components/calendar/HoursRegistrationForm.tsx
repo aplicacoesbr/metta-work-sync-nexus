@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Plus, Trash2, Clock, Pencil } from 'lucide-react';
+import { X, Plus, Trash2, Clock, Pencil, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -101,7 +101,7 @@ export const HoursRegistrationForm = ({
     retryDelay: 1000,
   });
 
-  const { data: projects } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       console.log('Fetching projects...');
@@ -117,13 +117,13 @@ export const HoursRegistrationForm = ({
       }
       
       console.log('Projects fetched:', data);
-      return data;
+      return data || [];
     },
     retry: 3,
     retryDelay: 1000,
   });
 
-  const { data: stages } = useQuery({
+  const { data: stages, isLoading: stagesLoading } = useQuery({
     queryKey: ['stages'],
     queryFn: async () => {
       console.log('Fetching stages...');
@@ -138,13 +138,13 @@ export const HoursRegistrationForm = ({
       }
       
       console.log('Stages fetched:', data);
-      return data;
+      return data || [];
     },
     retry: 3,
     retryDelay: 1000,
   });
 
-  const { data: tasks } = useQuery({
+  const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       console.log('Fetching tasks...');
@@ -159,7 +159,7 @@ export const HoursRegistrationForm = ({
       }
       
       console.log('Tasks fetched:', data);
-      return data;
+      return data || [];
     },
     retry: 3,
     retryDelay: 1000,
@@ -317,6 +317,7 @@ export const HoursRegistrationForm = ({
   if (!isVisible || !date) return null;
 
   const hasExistingHours = existingData?.horasponto?.total_hours > 0;
+  const hasNoProjects = !projects || projects.length === 0;
 
   return (
     <div className="w-[450px]">
@@ -414,6 +415,17 @@ export const HoursRegistrationForm = ({
                   </p>
                 </div>
               )}
+
+              {hasNoProjects && (
+                <div className="p-3 bg-orange-900/50 border border-orange-600 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-4 w-4 text-orange-200" />
+                    <p className="text-orange-200 text-sm">
+                      Nenhum projeto encontrado. Cadastre projetos na seção "Projetos" primeiro.
+                    </p>
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {projectRecords.map((record, index) => (
@@ -440,9 +452,10 @@ export const HoursRegistrationForm = ({
                             updateProjectRecord(index, 'project_id', value);
                             updateProjectRecord(index, 'project_name', project?.name || '');
                           }}
+                          disabled={hasNoProjects || projectsLoading}
                         >
                           <SelectTrigger className="bg-slate-600 border-slate-500 text-white">
-                            <SelectValue placeholder="Selecione..." />
+                            <SelectValue placeholder={projectsLoading ? "Carregando..." : "Selecione..."} />
                           </SelectTrigger>
                           <SelectContent>
                             {projects?.map((project) => (
@@ -486,6 +499,7 @@ export const HoursRegistrationForm = ({
                   onClick={addProjectRecord}
                   variant="outline"
                   className="w-full border-slate-600 text-gray-300 hover:bg-slate-700"
+                  disabled={hasNoProjects}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Adicionar Projeto
@@ -495,7 +509,7 @@ export const HoursRegistrationForm = ({
                   <Button 
                     onClick={handleSaveProjects}
                     className="w-full bg-blue-600 hover:bg-blue-700"
-                    disabled={saveProjectsMutation.isPending}
+                    disabled={saveProjectsMutation.isPending || hasNoProjects}
                   >
                     {saveProjectsMutation.isPending ? 'Salvando...' : 'Salvar Projetos'}
                   </Button>
